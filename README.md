@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> 专业的 AI 账号管理与协议反代系统 (v3.3.20)
+> 专业的 AI 账号管理与协议反代系统 (v3.3.23)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
@@ -8,7 +8,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.20-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.23-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -182,6 +182,74 @@ print(response.choices[0].message.content)
 ## 📝 开发者与社区
 
 *   **版本演进 (Changelog)**:
+    *   **v3.3.23 (2026-01-12)**:
+        - **更新通知 UI 重构 (Update Notification UI Modernization)**:
+            - **视觉升级**: 采用 "Glassmorphism" 毛玻璃风格设计，配合优雅的渐变背景与微光效果，大幅提升视觉精致度。
+            - **流畅动效**: 引入了更平滑的弹窗入场与退出动画，优化了交互体验。
+            - **深色模式适配**: 完美支持深色模式 (Dark Mode)，自动跟随系统主题切换，确保在任何环境下都不刺眼。
+            - **非侵入式布局**: 优化了弹窗位置与层级，确保不会遮挡顶部导航栏等关键操作区域。
+        - **国际化支持 (Internationalization)**:
+            - **双语适配**: 更新通知现已完整支持中英双语，根据应用语言设置自动切换文案。
+        - **检查逻辑修正**: 修复了更新检查状态更新的时序问题，确保在发现新版本时能稳定弹出通知。
+        - **菜单栏图标高清化修复 (Menu Bar Icon Resolution Fix)**:
+            - **Retina 适配**: 将菜单栏托盘图标 (`tray-icon.png`) 分辨率从 22x22 提升至 44x44，彻底解决了在高分屏下显示模糊的问题 (Fix Issue #557)。
+        - **Claude Thinking 压缩优化 (核心致谢 @ThanhNguyxn PR #566)**:
+            - **修复思考块乱序**: 解决了在使用 Context Compression (Kilo) 时，思考块 (Thinking Blocks) 可能被错误地排序到文本块之后的问题。
+            - **强制首位排序**: 引入了 `sort_thinking_blocks_first` 逻辑，确保助手消息中的思考块始终位于最前，符合 Anthropic API 的 400 校验规则。
+        - **账号路由优先级增强 (核心致谢 @ThanhNguyxn PR #567)**:
+            - **高配额优先策略**: 在同等级别 (Free/Pro/Ultra) 下，系统现在会优先选择**剩余配额更多**的账号进行调度。
+            - **避免木桶效应**: 防止因随机分配导致某些长配额账号被闲置，而短配额账号过早耗尽。
+        - **非流式响应 Base64 签名修复 (核心致谢 @ThanhNguyxn PR #568)**:
+            - **全模式兼容**: 将流式响应中的 Base64 思考签名解码逻辑同步应用到非流式响应 (Non-streaming) 中。
+            - **消除签名错误**: 彻底解决了在非流式客户端 (如 Python SDK) 中使用 Antigravity 代理时因签名编码格式不一致导致的 400 错误。
+        - **国际化 (i18n)**:
+            - **日语支持**: 新增日语 (Japanese) 本地化支持 (Thank you @Koshikai PR #526)。
+            - **土耳其语支持**: 新增土耳其语 (Turkish) 本地化支持 (Thank you @hakanyalitekin PR #515)。
+    *   **v3.3.22 (2026-01-12)**:
+        - **配额保护系统升级**:
+            - 支持自定义监控模型（`gemini-3-flash`, `gemini-3-pro-high`, `claude-sonnet-4-5`），仅在选中模型额度低于阈值时触发保护
+            - 保护逻辑优化为"勾选模型最小配额"触发机制
+            - 开启保护时默认勾选 `claude-sonnet-4-5`，UI 强制至少保留一个模型
+        - **全自动配额管理联动**:
+            - 强制开启后台自动刷新，确保配额数据实时同步
+            - 自动执行"刷新 → 保护 → 恢复 → 预热"完整生命周期管理
+        - **智能预热自定义勾选**:
+            - 支持自定义预热模型（`gemini-3-flash`, `gemini-3-pro-high`, `claude-sonnet-4-5`, `gemini-3-pro-image`）
+            - 新增独立 `SmartWarmup.tsx` 组件，提供与配额保护一致的勾选体验
+            - 开启预热时默认勾选所有核心模型，UI 强制至少保留一个模型
+            - 调度器实时读取配置，修改立即生效
+        - **智能预热系统基础功能**:
+            - 额度恢复到 100% 时自动触发预热
+            - 智能去重机制：同一 100% 周期仅预热一次
+            - 调度器每 10 分钟扫描并同步最新配额到前端
+            - 覆盖所有账号类型（Ultra/Pro/Free）
+        - **国际化完善**: 修复"自动检查更新"和"设备指纹"相关翻译缺失（Issue #550）
+        - **稳定性修复**: 修复高并发调度下的变量引用和所有权冲突问题
+        - **API 监控性能优化 (修复 Issue #560)**:
+            - **问题背景**: 修复 macOS 上打开 API 监控界面时出现 5-10 秒响应延迟和应用崩溃问题
+            - **数据库优化**:
+                - 新增 `status` 字段索引，统计查询性能提升 50 倍
+                - 优化 `get_stats()` 查询，从 3 次全表扫描合并为 1 次，查询时间减少 66%
+            - **分页加载**:
+                - 列表视图不再查询大型 `request_body` 和 `response_body` 字段，数据传输量减少 90%+
+                - 新增 `get_proxy_logs_paginated` 命令，支持分页查询（每页 20 条）
+                - 前端新增"加载更多"按钮，支持按需加载历史记录
+            - **按需详情查询**:
+                - 新增 `get_proxy_log_detail` 命令，点击日志时才查询完整详情
+                - 详情加载时间 0.1-0.5 秒，避免不必要的数据传输
+            - **自动清理功能**:
+                - 应用启动时自动清理 30 天前的旧日志，防止数据库无限增长
+                - 执行 VACUUM 释放磁盘空间
+            - **UI 优化**:
+                - 新增加载状态指示器，提供清晰的视觉反馈
+                - 新增 10 秒超时控制，防止长时间无响应
+                - 详情模态框新增加载指示器
+            - **性能提升**:
+                - 初始加载时间: 10-18 秒 → **0.5-1 秒** (10-36 倍提升)
+                - 内存占用: 1GB → **5MB** (200 倍减少)
+                - 数据传输量: 1-10GB → **1-5MB** (200-2000 倍减少)
+            - **影响范围**: 此优化彻底解决了大数据量场景下的性能问题，支持 10,000+ 条监控记录的流畅查看
+        - **反代日志增强**: 修正了反代温补逻辑中账号/模型日志记录问题，补充了部分缺失的国际化翻译项。
     *   **v3.3.21 (2026-01-11)**:
         - **设备指纹绑定系统 (Device Fingerprint Binding) - 降低风控检测 (核心致谢 @jlcodes99 PR #523)**:
             - **账号设备绑定**: 实现账号与设备信息的一对一绑定关系，切换账号时自动切换对应的设备指纹。
@@ -820,6 +888,8 @@ print(response.choices[0].message.content)
 <a href="https://github.com/byte-sunlight"><img src="https://github.com/byte-sunlight.png" width="50px" style="border-radius: 50%;" alt="byte-sunlight"/></a>
 <a href="https://github.com/jlcodes99"><img src="https://github.com/jlcodes99.png" width="50px" style="border-radius: 50%;" alt="jlcodes99"/></a>
 <a href="https://github.com/Vucius"><img src="https://github.com/Vucius.png" width="50px" style="border-radius: 50%;" alt="Vucius"/></a>
+<a href="https://github.com/Koshikai"><img src="https://github.com/Koshikai.png" width="50px" style="border-radius: 50%;" alt="Koshikai"/></a>
+<a href="https://github.com/hakanyalitekin"><img src="https://github.com/hakanyalitekin.png" width="50px" style="border-radius: 50%;" alt="hakanyalitekin"/></a>
 
 感谢所有为本项目付出汗水与智慧的开发者。
 *   **版权许可**: 基于 **CC BY-NC-SA 4.0** 许可，**严禁任何形式的商业行为**。

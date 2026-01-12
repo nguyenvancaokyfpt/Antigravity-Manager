@@ -169,6 +169,7 @@ impl AxumServer {
                 "/v1/models/detect",
                 post(handlers::common::handle_detect_model),
             )
+            .route("/internal/warmup", post(handlers::warmup::handle_warmup)) // 内部预热端点
             .route("/v1/api/event_logging/batch", post(silent_ok_handler))
             .route("/v1/api/event_logging", post(silent_ok_handler))
             // Account Management API

@@ -6,8 +6,11 @@ import { useConfigStore } from '../stores/useConfigStore';
 import { AppConfig } from '../types/config';
 import ModalDialog from '../components/common/ModalDialog';
 import { showToast } from '../components/common/ToastContainer';
+import QuotaProtection from '../components/settings/QuotaProtection';
+import SmartWarmup from '../components/settings/SmartWarmup';
 
 import { useTranslation } from 'react-i18next';
+
 
 function Settings() {
     const { t } = useTranslation();
@@ -31,6 +34,15 @@ function Settings() {
                 enabled: false,
                 url: ''
             }
+        },
+        scheduled_warmup: {
+            enabled: false,
+            monitored_models: []
+        },
+        quota_protection: {
+            enabled: false,
+            threshold_percentage: 10,
+            monitored_models: []
         }
     });
 
@@ -83,7 +95,8 @@ function Settings() {
 
     const handleSave = async () => {
         try {
-            await saveConfig(formData);
+            // 强制开启后台自动刷新，确保联动逻辑生效
+            await saveConfig({ ...formData, auto_refresh: true });
             showToast(t('common.saved'), 'success');
         } catch (error) {
             showToast(`${t('common.error')}: ${error}`, 'error');
@@ -260,6 +273,8 @@ function Settings() {
                                 >
                                     <option value="zh">简体中文</option>
                                     <option value="en">English</option>
+                                    <option value="ja">日本語</option>
+                                    <option value="tr">Türkçe</option>
                                 </select>
                             </div>
 
@@ -288,7 +303,7 @@ function Settings() {
                                         try {
                                             await invoke('toggle_auto_launch', { enable: enabled });
                                             setFormData({ ...formData, auto_launch: enabled });
-                                            showToast(enabled ? '已启用开机自动启动' : '已禁用开机自动启动', 'success');
+                                            showToast(enabled ? t('settings.general.auto_launch_enabled') : t('settings.general.auto_launch_disabled'), 'success');
                                         } catch (error) {
                                             showToast(`${t('common.error')}: ${error}`, 'error');
                                         }
@@ -303,8 +318,8 @@ function Settings() {
                             {/* 自动检查更新 */}
                             <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-base-200 rounded-lg border border-gray-100 dark:border-base-300">
                                 <div>
-                                    <div className="font-medium text-gray-900 dark:text-base-content">自动检查更新</div>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">启动时自动检查新版本</p>
+                                    <div className="font-medium text-gray-900 dark:text-base-content">{t('settings.general.auto_check_update')}</div>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('settings.general.auto_check_update_desc')}</p>
                                 </div>
                                 <label className="relative inline-flex items-center cursor-pointer">
                                     <input
@@ -322,7 +337,7 @@ function Settings() {
                                                     }
                                                 });
                                                 setFormData({ ...formData, auto_check_update: enabled });
-                                                showToast(enabled ? '已启用自动检查更新' : '已禁用自动检查更新', 'success');
+                                                showToast(enabled ? t('settings.general.auto_check_update_enabled') : t('settings.general.auto_check_update_disabled'), 'success');
                                             } catch (error) {
                                                 showToast(`${t('common.error')}: ${error}`, 'error');
                                             }
@@ -335,7 +350,7 @@ function Settings() {
                             {/* 检查间隔 */}
                             {formData.auto_check_update && (
                                 <div className="ml-4">
-                                    <label className="block text-sm font-medium text-gray-900 dark:text-base-content mb-2">检查间隔（小时）</label>
+                                    <label className="block text-sm font-medium text-gray-900 dark:text-base-content mb-2">{t('settings.general.update_check_interval')}</label>
                                     <input
                                         type="number"
                                         className="w-32 px-4 py-4 border border-gray-200 dark:border-base-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-base-content bg-gray-50 dark:bg-base-200"
@@ -352,13 +367,13 @@ function Settings() {
                                                         check_interval_hours: formData.update_check_interval ?? 24
                                                     }
                                                 });
-                                                showToast('已保存检查间隔设置', 'success');
+                                                showToast(t('settings.general.update_check_interval_saved'), 'success');
                                             } catch (error) {
                                                 showToast(`${t('common.error')}: ${error}`, 'error');
                                             }
                                         }}
                                     />
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">设置自动检查更新的时间间隔（1-168 小时）</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{t('settings.general.update_check_interval_desc')}</p>
                                 </div>
                             )}
                         </div>
@@ -366,72 +381,99 @@ function Settings() {
 
                     {/* 账号设置 */}
                     {activeTab === 'account' && (
-                        <div className="space-y-6">
-                            <h2 className="text-lg font-semibold text-gray-900 dark:text-base-content">{t('settings.account.title')}</h2>
-
+                        <div className="space-y-4 animate-in fade-in duration-500">
                             {/* 自动刷新配额 */}
-                            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-base-200 rounded-lg border border-gray-100 dark:border-base-300">
-                                <div>
-                                    <div className="font-medium text-gray-900 dark:text-base-content">{t('settings.account.auto_refresh')}</div>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('settings.account.auto_refresh_desc')}</p>
+                            <div className="group bg-white dark:bg-base-100 rounded-xl p-5 border border-gray-100 dark:border-base-200 hover:border-blue-200 transition-all duration-300 shadow-sm">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all duration-300">
+                                            <RefreshCw size={20} />
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-gray-900 dark:text-gray-100">{t('settings.account.auto_refresh')}</div>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('settings.account.auto_refresh_desc')}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-100 dark:border-blue-800/30">
+                                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider leading-none">{t('settings.account.always_on')}</span>
+                                    </div>
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        className="sr-only peer"
-                                        checked={formData.auto_refresh}
-                                        onChange={(e) => setFormData({ ...formData, auto_refresh: e.target.checked })}
-                                    />
-                                    <div className="w-11 h-6 bg-gray-200 dark:bg-base-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
-                                </label>
-                            </div>
 
-                            {/* 刷新间隔 */}
-                            {formData.auto_refresh && (
-                                <div className="ml-4">
-                                    <label className="block text-sm font-medium text-gray-900 dark:text-base-content mb-2">{t('settings.account.refresh_interval')}</label>
-                                    <input
-                                        type="number"
-                                        className="w-32 px-4 py-4 border border-gray-200 dark:border-base-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-base-content bg-gray-50 dark:bg-base-200"
-                                        min="1"
-                                        max="60"
-                                        value={formData.refresh_interval}
-                                        onChange={(e) => setFormData({ ...formData, refresh_interval: parseInt(e.target.value) })}
-                                    />
+                                <div className="mt-5 pt-5 border-t border-gray-50 dark:border-base-300 flex items-center gap-4 animate-in slide-in-from-top-1 duration-200">
+                                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('settings.account.refresh_interval')}</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            className="w-24 px-3 py-2 bg-gray-50 dark:bg-base-200 border border-gray-100 dark:border-base-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-blue-600 dark:text-blue-400"
+                                            min="1"
+                                            max="60"
+                                            value={formData.refresh_interval}
+                                            onChange={(e) => setFormData({ ...formData, refresh_interval: parseInt(e.target.value) })}
+                                        />
+                                    </div>
                                 </div>
-                            )}
+                            </div>
 
                             {/* 自动获取当前账号 */}
-                            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-base-200 rounded-lg border border-gray-100 dark:border-base-300">
-                                <div>
-                                    <div className="font-medium text-gray-900 dark:text-base-content">{t('settings.account.auto_sync')}</div>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('settings.account.auto_sync_desc')}</p>
+                            <div className="group bg-white dark:bg-base-100 rounded-xl p-5 border border-gray-100 dark:border-base-200 hover:border-emerald-200 transition-all duration-300 shadow-sm">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white transition-all duration-300">
+                                            <User size={20} />
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-gray-900 dark:text-gray-100">{t('settings.account.auto_sync')}</div>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('settings.account.auto_sync_desc')}</p>
+                                        </div>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            className="sr-only peer"
+                                            checked={formData.auto_sync}
+                                            onChange={(e) => setFormData({ ...formData, auto_sync: e.target.checked })}
+                                        />
+                                        <div className="w-11 h-6 bg-gray-200 dark:bg-base-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 shadow-inner"></div>
+                                    </label>
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        className="sr-only peer"
-                                        checked={formData.auto_sync}
-                                        onChange={(e) => setFormData({ ...formData, auto_sync: e.target.checked })}
-                                    />
-                                    <div className="w-11 h-6 bg-gray-200 dark:bg-base-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
-                                </label>
+
+                                {formData.auto_sync && (
+                                    <div className="mt-5 pt-5 border-t border-gray-50 dark:border-base-300 flex items-center gap-4 animate-in slide-in-from-top-1 duration-200">
+                                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('settings.account.sync_interval')}</label>
+                                        <input
+                                            type="number"
+                                            className="w-24 px-3 py-2 bg-gray-50 dark:bg-base-200 border border-gray-100 dark:border-base-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-bold text-emerald-600 dark:text-emerald-400"
+                                            min="1"
+                                            max="60"
+                                            value={formData.sync_interval}
+                                            onChange={(e) => setFormData({ ...formData, sync_interval: parseInt(e.target.value) })}
+                                        />
+                                    </div>
+                                )}
                             </div>
 
-                            {/* 同步间隔 */}
-                            {formData.auto_sync && (
-                                <div className="ml-4">
-                                    <label className="block text-sm font-medium text-gray-900 dark:text-base-content mb-2">{t('settings.account.sync_interval')}</label>
-                                    <input
-                                        type="number"
-                                        className="w-32 px-4 py-4 border border-gray-200 dark:border-base-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-base-content bg-gray-50 dark:bg-base-200"
-                                        min="1"
-                                        max="60"
-                                        value={formData.sync_interval}
-                                        onChange={(e) => setFormData({ ...formData, sync_interval: parseInt(e.target.value) })}
-                                    />
-                                </div>
-                            )}
+                            {/* 智能预热 (Smart Warmup) */}
+                            <div className="group bg-white dark:bg-base-100 rounded-xl p-5 border border-gray-100 dark:border-base-200 hover:border-orange-200 transition-all duration-300 shadow-sm">
+                                <SmartWarmup
+                                    config={formData.scheduled_warmup}
+                                    onChange={(newConfig) => setFormData({
+                                        ...formData,
+                                        scheduled_warmup: newConfig
+                                    })}
+                                />
+                            </div>
+
+                            {/* 配额保护 (Quota Protection) */}
+                            <div className="group bg-white dark:bg-base-100 rounded-xl p-5 border border-gray-100 dark:border-base-200 hover:border-rose-200 transition-all duration-300 shadow-sm">
+                                <QuotaProtection
+                                    config={formData.quota_protection}
+                                    onChange={(newConfig) => setFormData({
+                                        ...formData,
+                                        quota_protection: newConfig
+                                    })}
+                                />
+                            </div>
                         </div>
                     )}
 
@@ -569,7 +611,7 @@ function Settings() {
                                     <p className="text-sm text-gray-600 dark:text-gray-400">{t('settings.advanced.logs_desc')}</p>
                                 </div>
                                 <div className="badge badge-primary badge-outline gap-2 font-mono">
-                                    v3.3.21
+                                    v3.3.22
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <button
@@ -671,7 +713,7 @@ function Settings() {
                                         <h3 className="text-3xl font-black text-gray-900 dark:text-base-content tracking-tight mb-2">Antigravity Tools</h3>
                                         <div className="flex items-center justify-center gap-2 text-sm">
                                             <span className="px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium border border-blue-200 dark:border-blue-800">
-                                                v3.3.21
+                                                v3.3.22
                                             </span>
                                             <span className="text-gray-400 dark:text-gray-600">•</span>
                                             <span className="text-gray-500 dark:text-gray-400">Professional Account Management</span>

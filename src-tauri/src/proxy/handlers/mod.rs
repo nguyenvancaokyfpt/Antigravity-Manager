@@ -7,4 +7,5 @@ pub mod claude;
 pub mod common;
 pub mod gemini;
 pub mod mcp;
-pub mod openai; // Account check-token API handler
+pub mod openai;
+pub mod warmup; // 预热处理器

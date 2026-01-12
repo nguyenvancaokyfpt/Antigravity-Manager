@@ -50,6 +50,17 @@ export interface ZaiConfig {
     mcp: ZaiMcpConfig;
 }
 
+export interface ScheduledWarmupConfig {
+    enabled: boolean;
+    monitored_models: string[];
+}
+
+export interface QuotaProtectionConfig {
+    enabled: boolean;
+    threshold_percentage: number; // 1-99
+    monitored_models: string[];
+}
+
 export interface AppConfig {
     language: string;
     theme: string;
@@ -64,5 +75,8 @@ export interface AppConfig {
     auto_check_update?: boolean; // 自动检查更新
     update_check_interval?: number; // 更新检查间隔（小时）
     accounts_page_size?: number; // 账号列表每页显示数量,默认 0 表示自动计算
+    scheduled_warmup: ScheduledWarmupConfig;
+    quota_protection: QuotaProtectionConfig; // [NEW] 配额保护配置
     proxy: ProxyConfig;
 }
+
