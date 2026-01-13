@@ -1,4 +1,4 @@
-import { Shield } from 'lucide-react';
+import { Shield, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { QuotaProtectionConfig } from '../../types/config';
 
@@ -43,7 +43,7 @@ const QuotaProtection = ({ config, onChange }: QuotaProtectionProps) => {
     const monitoredModelsOptions = [
         { id: 'gemini-3-flash', label: 'Gemini 3 Flash' },
         { id: 'gemini-3-pro-high', label: 'Gemini 3 Pro High' },
-        { id: 'claude-sonnet-4-5', label: 'Claude 3.5 Sonnet' }
+        { id: 'claude-sonnet-4-5', label: 'Claude 4.5 Sonnet' }
     ];
 
     // 计算示例值
@@ -111,19 +111,32 @@ const QuotaProtection = ({ config, onChange }: QuotaProtectionProps) => {
                                 {t('settings.quota_protection.monitored_models_desc')}
                             </p>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                            {monitoredModelsOptions.map(model => (
-                                <button
-                                    key={model.id}
-                                    onClick={() => toggleModel(model.id)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 border ${(config.monitored_models || []).includes(model.id)
-                                        ? 'bg-rose-50 dark:bg-rose-900/30 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 shadow-sm'
-                                        : 'bg-gray-50 dark:bg-base-200 border-gray-100 dark:border-base-300 text-gray-400 dark:text-gray-500 hover:border-gray-300 dark:hover:border-gray-600'
-                                        }`}
-                                >
-                                    {model.label}
-                                </button>
-                            ))}
+                        <div className="grid grid-cols-3 gap-2">
+                            {monitoredModelsOptions.map((model) => {
+                                const isSelected = config.monitored_models?.includes(model.id);
+                                return (
+                                    <div
+                                        key={model.id}
+                                        onClick={() => toggleModel(model.id)}
+                                        className={`
+                                            flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-all duration-200
+                                            ${isSelected
+                                                ? 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-400'
+                                                : 'bg-gray-50/50 dark:bg-base-200/50 border-gray-100 dark:border-base-300/50 text-gray-500 hover:border-gray-200 dark:hover:border-base-300'}
+                                        `}
+                                    >
+                                        <span className="text-[11px] font-medium truncate pr-2">
+                                            {model.label}
+                                        </span>
+                                        <div className={`
+                                            w-4 h-4 rounded-full flex items-center justify-center transition-all duration-300
+                                            ${isSelected ? 'bg-rose-500 text-white scale-100' : 'bg-gray-200 dark:bg-base-300 text-transparent scale-75 opacity-0'}
+                                        `}>
+                                            <Check size={10} strokeWidth={4} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 

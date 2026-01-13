@@ -41,7 +41,13 @@
         "switch_to_english": "Englishに切り替え",
         "switch_to_chinese": "简体中文に切り替え",
         "switch_to_english_short": "EN",
-        "switch_to_chinese_short": "ZH"
+        "switch_to_chinese_short": "ZH",
+        "switch_to_japanese": "日本語に切り替え",
+        "switch_to_japanese_short": "JA",
+        "switch_to_turkish": "トルコ語に切り替え",
+        "switch_to_turkish_short": "TR",
+        "switch_to_vietnamese": "ベトナム語に切り替え",
+        "switch_to_vietnamese_short": "VI"
     },
     "dashboard": {
         "hello": "こんにちは 👋",

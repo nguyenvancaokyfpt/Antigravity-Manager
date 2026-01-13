@@ -14,7 +14,7 @@ const SmartWarmup: React.FC<SmartWarmupProps> = ({ config, onChange }) => {
     const warmupModelsOptions = [
         { id: 'gemini-3-flash', label: 'Gemini 3 Flash' },
         { id: 'gemini-3-pro-high', label: 'Gemini 3 Pro High' },
-        { id: 'claude-sonnet-4-5', label: 'Claude 3.5 Sonnet' },
+        { id: 'claude-sonnet-4-5', label: 'Claude 4.5 Sonnet' },
         { id: 'gemini-3-pro-image', label: 'Gemini 3 Pro Image' }
     ];
 
@@ -47,8 +47,8 @@ const SmartWarmup: React.FC<SmartWarmupProps> = ({ config, onChange }) => {
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${config.enabled
-                            ? 'bg-orange-500 text-white'
-                            : 'bg-orange-50 dark:bg-orange-900/20 text-orange-500'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-orange-50 dark:bg-orange-900/20 text-orange-500'
                         }`}>
                         <Sparkles size={20} />
                     </div>
@@ -79,7 +79,7 @@ const SmartWarmup: React.FC<SmartWarmupProps> = ({ config, onChange }) => {
                             <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest block mb-2">
                                 {t('settings.quota_protection.monitored_models_label', '监控模型')}
                             </label>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-4 gap-2">
                                 {warmupModelsOptions.map((model) => {
                                     const isSelected = config.monitored_models?.includes(model.id);
                                     return (
@@ -90,7 +90,7 @@ const SmartWarmup: React.FC<SmartWarmupProps> = ({ config, onChange }) => {
                                                 flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-all duration-200
                                                 ${isSelected
                                                     ? 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/50 text-orange-700 dark:text-orange-400'
-                                                    : 'bg-gray-50/50 dark:bg-base-200/50 border-transparent text-gray-500 hover:border-gray-200 dark:hover:border-base-300'}
+                                                    : 'bg-gray-50/50 dark:bg-base-200/50 border-gray-100 dark:border-base-300/50 text-gray-500 hover:border-gray-200 dark:hover:border-base-300'}
                                             `}
                                         >
                                             <span className="text-[11px] font-medium truncate pr-2">

@@ -41,7 +41,13 @@
         "switch_to_english": "İngilizce'ye Geç",
         "switch_to_chinese": "Çince'ye Geç",
         "switch_to_english_short": "EN",
-        "switch_to_chinese_short": "ZH"
+        "switch_to_chinese_short": "ZH",
+        "switch_to_japanese": "Japonca'ya Geç",
+        "switch_to_japanese_short": "JA",
+        "switch_to_turkish": "Türkçe'ye Geç",
+        "switch_to_turkish_short": "TR",
+        "switch_to_vietnamese": "Vietnamca'ya Geç",
+        "switch_to_vietnamese_short": "VI"
     },
     "dashboard": {
         "hello": "Merhaba, Kullanıcı 👋",
