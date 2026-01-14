@@ -107,6 +107,7 @@ pub struct NonStreamingProcessor {
     trailing_signature: Option<String>,
     pub has_tool_call: bool,
     pub scaling_enabled: bool,
+    pub context_limit: u32,
 }
 
 impl NonStreamingProcessor {
@@ -118,13 +119,15 @@ impl NonStreamingProcessor {
             thinking_signature: None,
             trailing_signature: None,
             has_tool_call: false,
-            scaling_enabled: false, // Default to false, set in process
+            scaling_enabled: false, 
+            context_limit: 1_048_576, // Default to 1M
         }
     }
 
     /// 处理 Gemini 响应并转换为 Claude 响应
-    pub fn process(&mut self, gemini_response: &GeminiResponse, scaling_enabled: bool) -> ClaudeResponse {
+    pub fn process(&mut self, gemini_response: &GeminiResponse, scaling_enabled: bool, context_limit: u32) -> ClaudeResponse {
         self.scaling_enabled = scaling_enabled;
+        self.context_limit = context_limit;
         // 获取 parts
         let empty_parts = vec![];
         let parts = gemini_response
@@ -344,10 +347,52 @@ impl NonStreamingProcessor {
             return;
         }
 
-        self.content_blocks.push(ContentBlock::Text {
-            text: self.text_builder.clone(),
-        });
+        let mut current_text = self.text_builder.clone();
         self.text_builder.clear();
+
+        // [NEW] MCP XML Bridge: 循环解析文本中可能存在的 XML 标签
+        while let Some(start_idx) = current_text.find("<mcp__") {
+            if let Some(tag_end_idx) = current_text[start_idx..].find('>') {
+                let actual_tag_end = start_idx + tag_end_idx;
+                let tool_name = &current_text[start_idx + 1..actual_tag_end];
+                let end_tag = format!("</{}>", tool_name);
+
+                if let Some(close_idx) = current_text.find(&end_tag) {
+                    // 1. 处理标签前的文本
+                    if start_idx > 0 {
+                        self.content_blocks.push(ContentBlock::Text {
+                            text: current_text[..start_idx].to_string(),
+                        });
+                    }
+
+                    // 2. 解析 XML 内容并转换为 ToolUse
+                    let input_str = &current_text[actual_tag_end + 1..close_idx];
+                    let input_json: serde_json::Value = serde_json::from_str(input_str.trim())
+                        .unwrap_or_else(|_| serde_json::json!({ "input": input_str.trim() }));
+
+                    self.content_blocks.push(ContentBlock::ToolUse {
+                        id: format!("{}-xml", tool_name),
+                        name: tool_name.to_string(),
+                        input: input_json,
+                        signature: None,
+                        cache_control: None,
+                    });
+                    self.has_tool_call = true;
+
+                    // 3. 继续处理剩余文本
+                    current_text = current_text[close_idx + end_tag.len()..].to_string();
+                    continue;
+                }
+            }
+            // 如果 XML 格式不完整, 退出循环并按普通文本处理
+            break;
+        }
+
+        if !current_text.is_empty() {
+            self.content_blocks.push(ContentBlock::Text {
+                text: current_text,
+            });
+        }
     }
 
     /// 刷新 thinking builder
@@ -387,7 +432,7 @@ impl NonStreamingProcessor {
         let usage = gemini_response
             .usage_metadata
             .as_ref()
-            .map(|u| to_claude_usage(u, self.scaling_enabled))
+            .map(|u| to_claude_usage(u, self.scaling_enabled, self.context_limit))
             .unwrap_or(Usage {
                 input_tokens: 0,
                 output_tokens: 0,
@@ -412,9 +457,9 @@ impl NonStreamingProcessor {
 }
 
 /// 转换 Gemini 响应为 Claude 响应 (公共接口)
-pub fn transform_response(gemini_response: &GeminiResponse, scaling_enabled: bool) -> Result<ClaudeResponse, String> {
+pub fn transform_response(gemini_response: &GeminiResponse, scaling_enabled: bool, context_limit: u32) -> Result<ClaudeResponse, String> {
     let mut processor = NonStreamingProcessor::new();
-    Ok(processor.process(gemini_response, scaling_enabled))
+    Ok(processor.process(gemini_response, scaling_enabled, context_limit))
 }
 
 #[cfg(test)]
@@ -450,7 +495,7 @@ mod tests {
             response_id: Some("resp_123".to_string()),
         };
 
-        let result = transform_response(&gemini_resp, false);
+        let result = transform_response(&gemini_resp, false, 1_000_000);
         assert!(result.is_ok());
 
         let claude_resp = result.unwrap();
@@ -500,7 +545,7 @@ mod tests {
             response_id: Some("resp_456".to_string()),
         };
 
-        let result = transform_response(&gemini_resp, false);
+        let result = transform_response(&gemini_resp, false, 1_000_000);
         assert!(result.is_ok());
 
         let claude_resp = result.unwrap();

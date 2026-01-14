@@ -59,6 +59,12 @@ pub fn load_account_index() -> Result<AccountIndex, String> {
     let content = fs::read_to_string(&index_path)
         .map_err(|e| format!("读取账号索引失败: {}", e))?;
     
+    // 如果文件内容为空，视为新索引
+    if content.trim().is_empty() {
+        crate::modules::logger::log_warn("账号索引文件内容为空，正在初始化新索引");
+        return Ok(AccountIndex::new());
+    }
+    
     let index: AccountIndex = serde_json::from_str(&content)
         .map_err(|e| format!("解析账号索引失败: {}", e))?;
         

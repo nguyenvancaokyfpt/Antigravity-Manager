@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> 专业的 AI 账号管理与协议反代系统 (v3.3.27)
+> 专业的 AI 账号管理与协议反代系统 (v3.3.29)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
@@ -8,7 +8,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.27-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.29-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -205,6 +205,79 @@ print(response.choices[0].message.content)
 ## 📝 开发者与社区
 
 *   **版本演进 (Changelog)**:
+    *   **v3.3.29 (2026-01-14)**:
+        - **OpenAI 流式响应 Function Call 支持修复 (Fix Issue #602, #614)**:
+            - **问题背景**: OpenAI 接口的流式响应 (`stream: true`) 中缺少 Function Call 处理逻辑,导致客户端无法接收到工具调用信息。
+            - **根本原因**: `create_openai_sse_stream` 函数只处理了文本内容、思考内容和图片,完全缺少对 `functionCall` 的处理。
+            - **修复内容**:
+                - 添加工具调用状态追踪变量 (`emitted_tool_calls`),防止重复发送
+                - 在 parts 循环中添加 `functionCall` 检测和转换逻辑
+                - 构建符合 OpenAI 规范的 `delta.tool_calls` 数组
+                - 使用哈希算法生成稳定的 `call_id`
+                - 包含完整的工具调用信息 (`index`, `id`, `type`, `function.name`, `function.arguments`)
+            - **影响范围**: 此修复确保了流式请求能够正确返回工具调用信息,与非流式响应和 Codex 流式响应的行为保持一致。所有使用 `stream: true` + `tools` 参数的客户端现在可以正常接收 Function Call 数据。
+        - **智能阈值回归 (Smart Threshold Recovery) - 解决 Issue #613**:
+            - **核心逻辑**: 实现了一种感知上下文负载的动态 Token 报告机制。
+            - **修复内容**:
+                - **三阶段缩放**: 在低负载(0-70%)保持高效压缩;在中负载(70-95%)平滑降低压缩率;在接近 100% 极限时真实上报(回归至 195k 左右)。
+                - **模型感应**: 处理器自动识别 1M (Flash) 和 2M (Pro) 的物理上下文界限。
+                - **400 错误拦截**: 即使触发物理溢出，代理层也会拦截 `Prompt is too long` 错误，并返回友好的中文/英文修复指引，引导用户执行 `/compact`。
+            - **影响范围**: 彻底解决了 Claude Code 在长对话场景下因不知道真实 Token 用量而拒绝压缩，最终导致 Gemini 服务端报错的问题。
+        - **Playwright MCP 连通性与稳定性增强 (参考 [Antigravity2Api](https://github.com/znlsl/Antigravity2Api)) - 解决 Issue #616**:
+            - **SSE 心跳保活**: 引入 15 秒定时心跳 (`: ping`)，解决长耗时工具调用导致的连接超时断开问题。
+            - **MCP XML Bridge**: 实现双向协议转换逻辑（指令注入 + 标签拦截），显著提升 MCP 工具（如 Playwright）在不稳定链路下的连通性。
+            - **上下文激进瘦身**: 
+                - **指令过滤**: 自动识别并移除 Claude Code 注入的冗余系统说明（~1-2k tokens）。
+                - **任务去重**: 剔除 tool_result 后重复的任务回显文本，物理减少 Context 占用。
+            - **智能 HTML 清理与截断**: 
+                - **深度剥离**: 针对浏览器快照自动移除 `<style>`、`<script>` 及内联 Base64 资源。
+                - **结构化截断**: 优化截断算法，确保不在 HTML 标签或 JSON 中间切断，避免产生破坏性的 400 结构错误。
+        - **账号索引加载容错修复 (Fix Issue #619)**:
+            - **修复内容**: 在加载 `accounts.json` 时增加了对空文件的检测及自动重置逻辑。
+            - **影响范围**: 彻底解决了因索引文件损坏/为空导致的软件启动报错 `expected value at line 1 column 1`。
+    *   **v3.3.28 (2026-01-14)**:
+        - **OpenAI Thinking Content 修复 (PR #604)**:
+            - **修复 Gemini 3 Pro thinking 内容丢失**: 在流式响应收集器中添加 `reasoning_content` 累积逻辑,解决了 Gemini 3 Pro (high/low) 非流式响应中思考内容丢失的问题。
+            - **支持 Claude *-thinking 模型**: 扩展 thinking 模型检测逻辑,支持所有以 `-thinking` 结尾的模型(如 `claude-opus-4-5-thinking`、`claude-sonnet-4-5-thinking`),自动注入 `thinkingConfig` 确保思考内容正常输出。
+            - **统一 thinking 配置**: 为所有 thinking 模型(Gemini 3 Pro 和 Claude thinking 系列)注入统一的 `thinkingBudget: 16000` 配置,符合 Cloud Code API 规范。
+            - **影响范围**: 此修复确保了 Gemini 3 Pro 和 Claude Thinking 模型在 OpenAI 协议下的 `reasoning_content` 字段正常工作,不影响 Anthropic 和 Gemini 原生协议。
+        - **Experimental 配置热更新 (PR #605)**:
+            - **新增热更新支持**: 为 `ExperimentalConfig` 添加热更新机制,与其他配置项(mapping、proxy、security、zai、scheduling)保持一致。
+            - **实时生效**: 用户修改实验性功能开关后无需重启应用即可生效,提升配置调整的便捷性。
+            - **架构完善**: 在 `AxumServer` 中添加 `experimental` 字段存储和 `update_experimental()` 更新方法,在 `save_config` 中自动触发热更新。
+        - **智能预热策略优化 (PR #606 - 性能提升 2.9x-5x)**:
+            - **分离刷新和预热**: 移除配额刷新时的自动预热触发,预热仅通过定时调度器(每10分钟)或手动按钮触发,避免用户刷新配额时意外消耗预热额度。
+            - **延长冷却期**: 冷却期从30分钟延长至4小时(14400秒),匹配 Pro 账号5小时重置周期,彻底解决同一周期内重复预热问题。
+            - **持久化历史记录**: 预热历史保存至 `~/.antigravity_tools/warmup_history.json`,程序重启后冷却期仍然有效,解决状态丢失问题。
+            - **并发执行优化**: 
+                - 筛选阶段: 每批5个账号并发获取配额,10个账号从~15秒降至~3秒 (5倍提升)
+                - 预热阶段: 每批3个任务并发执行,批次间隔2秒,40个任务从~80秒降至~28秒 (2.9倍提升)
+            - **白名单过滤**: 仅记录和预热4个核心模型组(`gemini-3-flash`、`claude-sonnet-4-5`、`gemini-3-pro-high`、`gemini-3-pro-image`),避免历史记录臃肿。
+            - **成功后记录**: 预热失败不记录历史,允许下次重试,提高容错性。
+            - **手动预热保护**: 手动预热也遵守4小时冷却期,过滤已预热模型并显示跳过数量,防止用户反复点击浪费配额。
+            - **完善日志**: 添加调度器扫描、预热启动/完成、冷却期跳过等详细日志,便于监控和调试。
+            - **影响范围**: 此优化大幅提升了智能预热的性能和可靠性,解决了重复预热、速度慢、状态丢失等多个问题,并发级别不会触发 RateLimit。
+        - **繁体中文本地化优化 (PR #607)**:
+            - **术语优化**: 优化100处繁体中文翻译,使其更符合台湾地区用户的语言习惯和表达方式。
+            - **用户体验提升**: 提升繁体中文界面的专业性和可读性,纯文本变更无代码逻辑影响。
+        - **API 监控性能优化 (修复长时间运行白屏问题)**:
+            - **问题背景**: 修复后台长时间运行后停留在 API 监控页面导致窗口卡成白屏的问题,程序仍在运行但 UI 无响应。
+            - **内存优化**:
+                - 减少内存日志限制从 1000 条降至 100 条,大幅降低内存占用
+                - 移除实时事件中的完整 request/response body 存储,仅保留摘要信息
+                - 后端事件发送优化,仅传输日志摘要而非完整数据,减少 IPC 传输量
+            - **渲染性能提升**:
+                - 集成 `@tanstack/react-virtual` 虚拟滚动库,仅渲染可见行(约 20-30 行)
+                - DOM 节点数量从 1000+ 降至 20-30,减少 97%
+                - 滚动帧率从 20-30fps 提升至 60fps
+            - **防抖机制**:
+                - 添加 500ms 防抖机制,批量处理日志更新,避免频繁状态更新
+                - 减少 React re-render 次数,提升 UI 响应性
+            - **性能提升**:
+                - 内存占用: ~500MB → <100MB (减少 90%)
+                - 首次渲染时间: ~2000ms → <100ms (提升 20 倍)
+                - 支持无限日志滚动,长时间运行无白屏
+            - **影响范围**: 此优化彻底解决了长时间运行和大量日志场景下的性能问题,即使停留在监控页面数小时也能保持流畅。
     *   **v3.3.27 (2026-01-13)**:
         - **实验性配置与用量缩放 (PR #603 增强)**:
             - **新增实验性设置面板**: 在 API 反代配置中增加了“实验性设置”卡片，用于管理正在探索中的功能。

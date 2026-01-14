@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> Professional AI Account Management & Proxy System (v3.3.27)
+> Professional AI Account Management & Proxy System (v3.3.29)
 
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
@@ -9,7 +9,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.27-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.29-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -187,6 +187,79 @@ print(response.choices[0].message.content)
 ## 📝 Developer & Community
 
 *   **Changelog**:
+    *   **v3.3.29 (2026-01-14)**:
+        - **OpenAI Streaming Function Call Support Fix (Fix Issue #602, #614)**:
+            - **Background**: OpenAI interface streaming responses (`stream: true`) lacked Function Call processing logic, preventing clients from receiving tool call information.
+            - **Root Cause**: The `create_openai_sse_stream` function only handled text content, thinking content, and images, completely missing `functionCall` processing.
+            - **Fix Details**:
+                - Added tool call state tracking variable (`emitted_tool_calls`) to prevent duplicate sends
+                - Added `functionCall` detection and conversion logic in parts loop
+                - Built OpenAI-compliant `delta.tool_calls` array
+                - Used hash algorithm to generate stable `call_id`
+                - Included complete tool call information (`index`, `id`, `type`, `function.name`, `function.arguments`)
+            - **Impact**: This fix ensures streaming requests correctly return tool call information, maintaining consistency with non-streaming responses and Codex streaming responses. All clients using `stream: true` + `tools` parameters can now properly receive Function Call data.
+        - **Smart Threshold Recovery - Resolve Issue #613**:
+            - **Core Logic**: Implemented a dynamic token reporting mechanism perceived to context load.
+            - **Fix Details**:
+                - **Three-Stage Scaling**: Maintains efficient compression at low loads (0-70%), smoothly reduces compression rate at medium loads (70-95%), and reports real usage near the 100% limit (regressing to ~195k).
+                - **Model Awareness**: Processor automatically identifies physical context boundaries for 1M (Flash) and 2M (Pro).
+                - **400 Error Interception**: Even if physical overflow occurs, the proxy intercepts `Prompt is too long` errors and returns friendly guidance, directing users to execute `/compact`.
+            - **Impact**: Completely resolved the issue where Claude Code refused to compress due to hidden token usage, ultimately leading to Gemini server errors in long conversation scenarios.
+        - **Playwright MCP Stability & Connectivity Enhancement (Inspired by [Antigravity2Api](https://github.com/znlsl/Antigravity2Api)) - Resolve Issue #616**:
+            - **SSE Keep-Alive**: Introduced 15s heartbeats (`: ping`) to prevent connection timeouts during long-running tool calls.
+            - **MCP XML Bridge**: Bidirectional protocol conversion (instruction injection + label interception), significantly improving reliability for MCP tools (like Playwright).
+            - **Aggressive Context Slimming**:
+                - **Instruction Filtering**: Automatically removes redundant Claude Code system instructions (~1-2k tokens).
+                - **Task Deduplication**: Strips repeated task echo text following tool results to further reduce context usage.
+            - **Intelligent HTML Cleaning & Truncation**:
+                - **Deep Stripping**: Automatically removes `<style>`, `<script>`, and inline Base64 resources from browser snapshots.
+                - **Structured Truncation**: Enhanced truncation algorithm prevents cutting through HTML tags or JSON objects, avoiding 400 structure errors.
+        - **Account Index Loading Robustness (Fix Issue #619)**:
+            - **Fix Details**: Added empty file detection and automatic reset logic when loading `accounts.json`.
+            - **Impact**: Completely resolved the startup error `expected value at line 1 column 1` caused by corrupted or empty index files.
+    *   **v3.3.28 (2026-01-14)**:
+        - **OpenAI Thinking Content Fix (PR #604)**:
+            - **Fixed Gemini 3 Pro Thinking Content Loss**: Added `reasoning_content` accumulation logic in streaming response collector, resolving the issue where Gemini 3 Pro (high/low) non-streaming responses lost thinking content.
+            - **Support for Claude *-thinking Models**: Extended thinking model detection logic to support all models ending with `-thinking` (e.g., `claude-opus-4-5-thinking`, `claude-sonnet-4-5-thinking`), automatically injecting `thinkingConfig` to ensure proper thinking content output.
+            - **Unified Thinking Configuration**: Injected unified `thinkingBudget: 16000` configuration for all thinking models (Gemini 3 Pro and Claude thinking series), complying with Cloud Code API specifications.
+            - **Impact**: This fix ensures the `reasoning_content` field works properly for Gemini 3 Pro and Claude Thinking models under OpenAI protocol, without affecting Anthropic and Gemini native protocols.
+        - **Experimental Config Hot Reload (PR #605)**:
+            - **Added Hot Reload Support**: Added hot reload mechanism for `ExperimentalConfig`, consistent with other config items (mapping, proxy, security, zai, scheduling).
+            - **Real-time Effect**: Users can modify experimental feature switches without restarting the application, improving configuration adjustment convenience.
+            - **Architecture Enhancement**: Added `experimental` field storage and `update_experimental()` method in `AxumServer`, automatically triggering hot reload in `save_config`.
+        - **Smart Warmup Strategy Optimization (PR #606 - 2.9x-5x Performance Boost)**:
+            - **Separated Refresh and Warmup**: Removed automatic warmup trigger during quota refresh. Warmup now only triggers via scheduler (every 10 minutes) or manual button, avoiding accidental quota consumption when users refresh quotas.
+            - **Extended Cooldown Period**: Cooldown period extended from 30 minutes to 4 hours (14400 seconds), matching Pro account 5-hour reset cycle, completely resolving repeated warmup within the same cycle.
+            - **Persistent History Records**: Warmup history saved to `~/.antigravity_tools/warmup_history.json`, cooldown period remains effective after program restart, resolving state loss issue.
+            - **Concurrent Execution Optimization**: 
+                - Filtering phase: 5 accounts per batch concurrent quota fetching, 10 accounts from ~15s to ~3s (5x improvement)
+                - Warmup phase: 3 tasks per batch concurrent execution with 2s interval, 40 tasks from ~80s to ~28s (2.9x improvement)
+            - **Whitelist Filtering**: Only records and warms up 4 core model groups (`gemini-3-flash`, `claude-sonnet-4-5`, `gemini-3-pro-high`, `gemini-3-pro-image`), avoiding bloated history records.
+            - **Record After Success**: Failed warmups are not recorded in history, allowing retry next time, improving fault tolerance.
+            - **Manual Warmup Protection**: Manual warmup also respects 4-hour cooldown period, filters already-warmed models and displays skip count, preventing users from repeatedly clicking and wasting quota.
+            - **Enhanced Logging**: Added detailed logs for scheduler scanning, warmup start/completion, cooldown skips, facilitating monitoring and debugging.
+            - **Impact**: This optimization significantly improves smart warmup performance and reliability, resolving multiple issues including repeated warmup, slow speed, and state loss. Concurrency level won't trigger RateLimit.
+        - **Traditional Chinese Localization Optimization (PR #607)**:
+            - **Terminology Optimization**: Optimized 100 Traditional Chinese translations to better align with Taiwan users' language habits and expressions.
+            - **User Experience Enhancement**: Improved professionalism and readability of Traditional Chinese interface, pure text changes with no code logic impact.
+        - **API Monitor Performance Optimization (Fix Long-Running White Screen Issue)**:
+            - **Background**: Fixed the issue where the window would freeze to a white screen after prolonged background operation when staying on the API monitor page, with the program still running but UI unresponsive.
+            - **Memory Optimization**:
+                - Reduced in-memory log limit from 1000 to 100 entries, significantly lowering memory usage
+                - Removed full request/response body storage in real-time events, retaining only summary information
+                - Optimized backend event transmission to send only log summaries instead of complete data, reducing IPC transfer volume
+            - **Rendering Performance Boost**:
+                - Integrated `@tanstack/react-virtual` virtual scrolling library, rendering only visible rows (~20-30 rows)
+                - DOM node count reduced from 1000+ to 20-30, a 97% reduction
+                - Scroll frame rate improved from 20-30fps to 60fps
+            - **Debounce Mechanism**:
+                - Added 500ms debounce mechanism for batch log updates, avoiding frequent state updates
+                - Reduced React re-render count, improving UI responsiveness
+            - **Performance Improvements**:
+                - Memory usage: ~500MB → <100MB (90% reduction)
+                - Initial render time: ~2000ms → <100ms (20x improvement)
+                - Supports infinite log scrolling, no white screen during long-running sessions
+            - **Impact**: This optimization completely resolves performance issues in long-running and high-volume log scenarios, maintaining smooth operation even when staying on the monitor page for hours.
     *   **v3.3.27 (2026-01-13)**:
         - **Experimental Config & Usage Scaling (PR #603 Enhancement)**:
             - **New Experimental Settings Panel**: Added an "Experimental Settings" card in API Proxy configuration to manage features currently under exploration.
