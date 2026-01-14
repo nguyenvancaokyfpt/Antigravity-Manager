@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> 专业的 AI 账号管理与协议反代系统 (v3.3.29)
+> 专业的 AI 账号管理与协议反代系统 (v3.3.31)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
@@ -8,7 +8,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.29-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.31-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -205,6 +205,31 @@ print(response.choices[0].message.content)
 ## 📝 开发者与社区
 
 *   **版本演进 (Changelog)**:
+    *   **v3.3.31 (2026-01-14)**:
+        - **配额保护失效修复 (Fix Issue #631)**:
+            - **内存状态同步**: 修复了加载账号触发配额保护时，内存状态未立即同步的问题，确保保护机制即时生效。
+            - **全场景覆盖**: 在“粘性会话 (Sticky Session)”和“60秒锁定 (60s Window Lock)”逻辑中补充了配额保护检查，防止受限账号被错误复用。
+            - **代码优化**: 修复了 `token_manager.rs` 中的部分编译警告。
+        - **Claude 工具调用重复报错修复 (Fix Issue #632)**:
+            - **弹性修复优化**: 改进了 `Elastic-Recovery` 逻辑，在注入占位结果前增加全量消息 ID 预扫描，彻底避免了 `Found multiple tool_result blocks with id` 错误。
+            - **Anthropic 协议对齐**: 确保生成的请求包严格符合 Anthropic 对工具调用 ID 唯一性的要求。
+    *   **v3.3.30 (2026-01-14)**:
+        - **模型级配额保护 (Issue #621)**:
+            - **隔离优化**: 解决了因单个模型配额耗尽而禁用整个账号的问题。现在配额保护仅针对受限的具体模型，账号仍可处理其他模型的请求。
+            - **自动迁移**: 新系统会自动将旧版因配额保护被全局禁用的账号恢复，并平滑转为模型级限制。
+            - **全协议支持项目**: 已同步更新 Claude, OpenAI (Chat/DALL-E), Gemini, Audio 处理器的路由逻辑。
+        - **Gemini 参数幻觉修复 (PR #622)**:
+            - **参数纠错**: 修复了 Gemini 模型将 `pattern` 参数错误放置在 `description` 或 `query` 字段的问题，增加了自动重映射逻辑。
+            - **布尔值强制转换**: 增加了对 `yes`/`no`、`-n` 等非标准布尔值的自动转换支持，解决了 `lineNumbers` 等参数因类型错误导致的调用失败。
+            - **影响范围**: 显著提升了 Gemini 模型在 Claude Code CLI 及其他工具调用场景下的稳定性和兼容性。
+        - **代码清理与警告修复 (PR #628)**:
+            - **消除编译器警告**: 修复了多个未使用的导入和变量警告，移除了冗余代码，保持代码库整洁。
+            - **跨平台兼容性**: 针对 Windows/macOS/Linux 不同平台的代码路径进行了宏标记优化。
+        - **API 密钥自定义编辑功能 (Issue #627)**:
+            - **自定义密钥支持**: API 反代页面的"API 密钥"配置项现在支持直接编辑,用户可以输入自定义密钥,适合多实例部署场景。
+            - **保留自动生成**: 保留了原有的"重新生成"功能,用户可以选择自动生成或手动输入。
+            - **格式验证**: 添加了密钥格式验证(必须以 `sk-` 开头,长度至少 10 个字符),防止无效输入。
+            - **多语言支持**: 为所有 6 种支持的语言(简体中文、英文、繁体中文、日语、土耳其语、越南语)添加了完整的国际化翻译。
     *   **v3.3.29 (2026-01-14)**:
         - **OpenAI 流式响应 Function Call 支持修复 (Fix Issue #602, #614)**:
             - **问题背景**: OpenAI 接口的流式响应 (`stream: true`) 中缺少 Function Call 处理逻辑,导致客户端无法接收到工具调用信息。
@@ -1049,6 +1074,7 @@ print(response.choices[0].message.content)
 <a href="https://github.com/Vucius"><img src="https://github.com/Vucius.png" width="50px" style="border-radius: 50%;" alt="Vucius"/></a>
 <a href="https://github.com/Koshikai"><img src="https://github.com/Koshikai.png" width="50px" style="border-radius: 50%;" alt="Koshikai"/></a>
 <a href="https://github.com/hakanyalitekin"><img src="https://github.com/hakanyalitekin.png" width="50px" style="border-radius: 50%;" alt="hakanyalitekin"/></a>
+<a href="https://github.com/Gok-tug"><img src="https://github.com/Gok-tug.png" width="50px" style="border-radius: 50%;" alt="Gok-tug"/></a>
 
 感谢所有为本项目付出汗水与智慧的开发者。
 *   **版权许可**: 基于 **CC BY-NC-SA 4.0** 许可，**严禁任何形式的商业行为**。
