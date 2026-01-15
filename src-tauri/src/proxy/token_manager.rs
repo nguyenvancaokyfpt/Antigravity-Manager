@@ -47,6 +47,22 @@ impl TokenManager {
             session_accounts: Arc::new(DashMap::new()),
         }
     }
+
+    /// 启动限流记录自动清理后台任务（每60秒检查并清除过期记录）
+    pub fn start_auto_cleanup(&self) {
+        let tracker = self.rate_limit_tracker.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                let cleaned = tracker.cleanup_expired();
+                if cleaned > 0 {
+                    tracing::info!("🧹 Auto-cleanup: Removed {} expired rate limit record(s)", cleaned);
+                }
+            }
+        });
+        tracing::info!("✅ Rate limit auto-cleanup task started (interval: 60s)");
+    }
     
     /// 从主应用账号目录加载所有账号
     pub async fn load_accounts(&self) -> Result<usize, String> {
