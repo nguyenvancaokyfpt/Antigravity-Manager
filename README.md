@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> 专业的 AI 账号管理与协议反代系统 (v3.3.31)
+> 专业的 AI 账号管理与协议反代系统 (v3.3.32)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
@@ -8,7 +8,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.31-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.32-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -205,6 +205,12 @@ print(response.choices[0].message.content)
 ## 📝 开发者与社区
 
 *   **版本演进 (Changelog)**:
+    *   **v3.3.32 (2026-01-15)**:
+        - **核心调度与稳定性优化 (Fix Issue #630, #631 - 核心致谢 @lbjlaq PR #640)**:
+            - **配额漏洞与绕过修复**: 解决了在高并发或特定重试场景下，配额保护机制可能被绕过的潜在漏洞。
+            - **限流 Key 匹配优化**: 增强了 `TokenManager` 中限流记录的匹配精准度，解决了在多实例或复杂网络环境下可能出现的速率限制判定不一致问题。
+            - **账号禁用逻辑加固**: 修复了手动禁用账号在某些缓存生命周期内未立即从调度池中彻底剥离的问题，确保“禁用即生效”。
+            - **账号状态重置机制**: 完善了账号失败计数器在成功请求后的重置策略，避免账号因历史波动被长期误锁定。
     *   **v3.3.31 (2026-01-14)**:
         - **配额保护失效修复 (Fix Issue #631)**:
             - **内存状态同步**: 修复了加载账号触发配额保护时，内存状态未立即同步的问题，确保保护机制即时生效。

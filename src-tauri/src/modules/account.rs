@@ -634,7 +634,7 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
         if config.quota_protection.enabled {
             if let Some(ref q) = account.quota {
                 let threshold = config.quota_protection.threshold_percentage as i32;
-                let mut changed = false;
+
 
                 for model in &q.models {
                     // 仅对用户勾选的模型进行监控
@@ -650,7 +650,7 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
                                 account.email, model.name, model.percentage, threshold
                             ));
                             account.protected_models.insert(model.name.clone());
-                            changed = true;
+
                         }
                     } else {
                         // 自动恢复单个模型
@@ -660,7 +660,7 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
                                 account.email, model.name, model.percentage
                             ));
                             account.protected_models.remove(&model.name);
-                            changed = true;
+
                         }
                     }
                 }

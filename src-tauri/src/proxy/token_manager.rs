@@ -278,6 +278,8 @@ impl TokenManager {
 
         // 5. 遍历受监控的模型，检查保护与恢复
         let threshold = config.threshold_percentage as i32;
+
+
         let mut changed = false;
 
         for model in models {
@@ -308,6 +310,8 @@ impl TokenManager {
                 }
             }
         }
+        
+        let _ = changed; // 避免 unused 警告，如果后续逻辑需要可以继续使用
         
         // 我们不再因为配额原因返回 true（即不再跳过账号），
         // 而是加载并在 get_token 时进行过滤。
@@ -537,32 +541,29 @@ impl TokenManager {
                 // 1. 检查会话是否已绑定账号
                 if let Some(bound_id) = self.session_accounts.get(sid).map(|v| v.clone()) {
                     // 【修复】先通过 account_id 找到对应的账号，获取其 email
-                    // 因为限流记录是以 email 为 key 存储的
+                    // 2. 转换 email -> account_id 检查绑定的账号是否限流
                     if let Some(bound_token) = tokens_snapshot.iter().find(|t| t.account_id == bound_id) {
-                        // 2. 使用 email 检查绑定的账号是否限流
-                        let reset_sec = self.rate_limit_tracker.get_remaining_wait(&bound_token.email);
+                        let key = self.email_to_account_id(&bound_token.email).unwrap_or_else(|| bound_token.account_id.clone());
+                        let reset_sec = self.rate_limit_tracker.get_remaining_wait(&key);
                         if reset_sec > 0 {
                             // 【修复 Issue #284】立即解绑并切换账号，不再阻塞等待
-                            tracing::warn!(
-                                "Session {} bound account {} is rate-limited ({}s remaining). Unbinding and switching to next available account.", 
-                                sid, bound_token.email, reset_sec
+                            // 原因：阻塞等待会导致并发请求时客户端 socket 超时 (UND_ERR_SOCKET)
+                            tracing::debug!(
+                                "Sticky Session: Bound account {} is rate-limited ({}s), unbinding and switching.",
+                                bound_token.email, reset_sec
                             );
                             self.session_accounts.remove(sid);
-                        } else if bound_token.protected_models.contains(target_model) {
-                            // 【修复】检查是否模型受限
-                            tracing::warn!(
-                                "Session {} bound account {} is protected for model {}. Unbinding.", 
-                                sid, bound_token.email, target_model
-                            );
-                            self.session_accounts.remove(sid);
-                        } else if !attempted.contains(&bound_id) {
+                        } else if !attempted.contains(&bound_id) && !bound_token.protected_models.contains(target_model) {
                             // 3. 账号可用且未被标记为尝试失败，优先复用
                             tracing::debug!("Sticky Session: Successfully reusing bound account {} for session {}", bound_token.email, sid);
                             target_token = Some(bound_token.clone());
+                        } else if bound_token.protected_models.contains(target_model) {
+                            tracing::debug!("Sticky Session: Bound account {} is quota-protected for model {}, unbinding and switching.", bound_token.email, target_model);
+                            self.session_accounts.remove(sid);
                         }
                     } else {
                         // 绑定的账号已不存在（可能被删除），解绑
-                        tracing::warn!("Session {} bound to non-existent account {}, unbinding.", sid, bound_id);
+                        tracing::debug!("Sticky Session: Bound account not found for session {}, unbinding", sid);
                         self.session_accounts.remove(sid);
                     }
                 }
@@ -572,16 +573,19 @@ impl TokenManager {
             if target_token.is_none() && !rotate && quota_group != "image_gen" {
                 // 【优化】使用预先获取的快照，不再在循环内加锁
                 if let Some((account_id, last_time)) = &last_used_account_id {
+                    // [FIX #3] 60s 锁定逻辑应检查 `attempted` 集合，避免重复尝试失败的账号
                     if last_time.elapsed().as_secs() < 60 && !attempted.contains(account_id) {
                         if let Some(found) = tokens_snapshot.iter().find(|t| &t.account_id == account_id) {
-                            // 【修复】检查限流状态，避免复用已被锁定的账号
-                            // 【修复】检查模型保护状态
-                            let is_protected = found.protected_models.contains(target_model);
-                            if !self.is_rate_limited(&found.email) && !is_protected {
+                            // 【修复】检查限流状态和配额保护，避免复用已被锁定的账号
+                            if !self.is_rate_limited_by_account_id(&found.account_id) && !found.protected_models.contains(target_model) { // Changed to account_id
                                 tracing::debug!("60s Window: Force reusing last account: {}", found.email);
                                 target_token = Some(found.clone());
                             } else {
-                                tracing::debug!("60s Window: Last account {} is rate-limited or protected, skipping", found.email);
+                                if self.is_rate_limited_by_account_id(&found.account_id) { // Changed to account_id
+                                    tracing::debug!("60s Window: Last account {} is rate-limited, skipping", found.email);
+                                } else {
+                                    tracing::debug!("60s Window: Last account {} is quota-protected for model {}, skipping", found.email, target_model);
+                                }
                             }
                         }
                     }
@@ -604,7 +608,7 @@ impl TokenManager {
                         }
 
                         // 【新增】主动避开限流或 5xx 锁定的账号 (来自 PR #28 的高可用思路)
-                        if self.is_rate_limited(&candidate.account_id) {
+                        if self.is_rate_limited_by_account_id(&candidate.account_id) { // Changed to account_id
                             continue;
                         }
 
@@ -638,7 +642,7 @@ impl TokenManager {
                     }
 
                     // 【新增】主动避开限流或 5xx 锁定的账号
-                    if self.is_rate_limited(&candidate.account_id) {
+                    if self.is_rate_limited_by_account_id(&candidate.account_id) { // Changed to account_id
                         continue;
                     }
 
@@ -675,7 +679,7 @@ impl TokenManager {
                             
                             // 重新尝试选择账号
                             let retry_token = tokens_snapshot.iter()
-                                .find(|t| !attempted.contains(&t.account_id) && !self.is_rate_limited(&t.account_id));
+                                .find(|t| !attempted.contains(&t.account_id) && !self.is_rate_limited_by_account_id(&t.account_id)); // Changed to account_id
                             
                             if let Some(t) = retry_token {
                                 tracing::info!("✅ Buffer delay successful! Found available account: {}", t.email);
@@ -839,6 +843,9 @@ impl TokenManager {
 
         std::fs::write(&path, serde_json::to_string_pretty(&content).unwrap())
             .map_err(|e| format!("写入文件失败: {}", e))?;
+        
+        // 【修复 Issue #3】从内存中移除禁用的账号，防止被60s锁定逻辑继续使用
+        self.tokens.remove(account_id);
 
         tracing::warn!("Account disabled: {} ({:?})", account_id, path);
         Ok(())
@@ -963,15 +970,18 @@ impl TokenManager {
     // ===== 限流管理方法 =====
     
     /// 标记账号限流(从外部调用,通常在 handler 中)
+    /// 参数为 email，内部会自动转换为 account_id
     pub fn mark_rate_limited(
         &self,
-        account_id: &str,
+        email: &str,
         status: u16,
         retry_after_header: Option<&str>,
         error_body: &str,
     ) {
+        // 【替代方案】转换 email -> account_id
+        let key = self.email_to_account_id(email).unwrap_or_else(|| email.to_string());
         self.rate_limit_tracker.parse_from_error(
-            account_id,
+            &key,
             status,
             retry_after_header,
             error_body,
@@ -980,7 +990,19 @@ impl TokenManager {
     }
     
     /// 检查账号是否在限流中
-    pub fn is_rate_limited(&self, account_id: &str) -> bool {
+    /// 参数为 email，内部会自动转换为 account_id
+    pub fn is_rate_limited(&self, email: &str) -> bool {
+        // 【替代方案】转换 email -> account_id
+        if let Some(account_id) = self.email_to_account_id(email) {
+            self.rate_limit_tracker.is_rate_limited(&account_id)
+        } else {
+            // Fallback: 如果找不到，直接用email查询(兼容旧数据)
+            self.rate_limit_tracker.is_rate_limited(email)
+        }
+    }
+
+    /// 检查账号是否在限流中 (直接使用 account_id)
+    pub fn is_rate_limited_by_account_id(&self, account_id: &str) -> bool {
         self.rate_limit_tracker.is_rate_limited(account_id)
     }
     
@@ -992,8 +1014,16 @@ impl TokenManager {
     
     /// 清除过期的限流记录
     #[allow(dead_code)]
-    pub fn cleanup_expired_rate_limits(&self) -> usize {
-        self.rate_limit_tracker.cleanup_expired()
+    pub fn clean_expired_rate_limits(&self) {
+        self.rate_limit_tracker.cleanup_expired();
+    }
+    
+    /// 【替代方案】通过 email 查找对应的 account_id
+    /// 用于将 handlers 传入的 email 转换为 tracker 使用的 account_id
+    fn email_to_account_id(&self, email: &str) -> Option<String> {
+        self.tokens.iter()
+            .find(|entry| entry.value().email == email)
+            .map(|entry| entry.value().account_id.clone())
     }
     
     /// 清除指定账号的限流记录
