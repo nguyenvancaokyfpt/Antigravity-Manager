@@ -8,9 +8,9 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use serde::Serialize;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
-use crate::models::{Account, QuotaData};
+use crate::models::QuotaData;
 use crate::modules;
 use crate::proxy::server::AppState;
 
@@ -80,13 +80,14 @@ pub struct AccountSummary {
     pub disabled_count: usize,
 }
 
-/// Handle check-token API - returns account info and refreshes all quotas
+/// Handle check-token API - returns cached account info from database
+/// Note: Quota refresh is handled by BackgroundTaskRunner, not this API
 pub async fn handle_check_token(State(_state): State<AppState>) -> Response {
-    info!("📊 Check-token API called - refreshing all quotas...");
+    info!("📊 Check-token API called - returning cached quota data...");
 
     // 1. Load all accounts from the main account module
     let accounts_result = modules::account::list_accounts();
-    let mut accounts = match accounts_result {
+    let accounts = match accounts_result {
         Ok(accs) => accs,
         Err(e) => {
             error!("Failed to load accounts: {}", e);
@@ -102,37 +103,19 @@ pub async fn handle_check_token(State(_state): State<AppState>) -> Response {
     };
 
     let total_accounts = accounts.len();
-    let mut refreshed = 0;
-    let mut failed = 0;
+    let mut has_quota = 0;
+    let mut no_quota = 0;
     let mut account_infos: Vec<AccountInfo> = Vec::with_capacity(total_accounts);
 
-    // 2. Refresh quota for each account
-    for account in accounts.iter_mut() {
-        let refresh_result = refresh_account_quota(account).await;
+    // 2. Read existing quota info from database (no external API calls)
+    for account in accounts.iter() {
+        let quota_info = account.quota.as_ref().map(|q| convert_quota_info(q));
 
-        let (refresh_status, quota_info) = match refresh_result {
-            Ok(q) => {
-                refreshed += 1;
-                (
-                    RefreshStatus {
-                        refreshed: true,
-                        error: None,
-                    },
-                    Some(convert_quota_info(&q)),
-                )
-            }
-            Err(e) => {
-                failed += 1;
-                warn!("Failed to refresh quota for {}: {}", account.email, e);
-                (
-                    RefreshStatus {
-                        refreshed: false,
-                        error: Some(e),
-                    },
-                    account.quota.as_ref().map(|q| convert_quota_info(q)),
-                )
-            }
-        };
+        if quota_info.is_some() {
+            has_quota += 1;
+        } else {
+            no_quota += 1;
+        }
 
         account_infos.push(AccountInfo {
             id: account.id.clone(),
@@ -145,7 +128,10 @@ pub async fn handle_check_token(State(_state): State<AppState>) -> Response {
             disabled: account.disabled,
             proxy_disabled: account.proxy_disabled,
             quota: quota_info,
-            refresh_status,
+            refresh_status: RefreshStatus {
+                refreshed: false, // We don't refresh here anymore
+                error: None,
+            },
         });
     }
 
@@ -153,44 +139,21 @@ pub async fn handle_check_token(State(_state): State<AppState>) -> Response {
     let summary = calculate_summary(&account_infos);
 
     info!(
-        "✅ Check-token completed: {}/{} accounts refreshed successfully",
-        refreshed, total_accounts
+        "✅ Check-token completed: {}/{} accounts have cached quota data",
+        has_quota, total_accounts
     );
 
     // 4. Return response
     let response = CheckTokenResponse {
         success: true,
         total_accounts,
-        refreshed,
-        failed,
+        refreshed: has_quota, // Renamed semantics: accounts with quota data
+        failed: no_quota,     // Renamed semantics: accounts without quota data
         accounts: account_infos,
         summary,
     };
 
     Json(response).into_response()
-}
-
-/// Refresh quota for a single account
-async fn refresh_account_quota(account: &mut Account) -> Result<QuotaData, String> {
-    // Skip disabled accounts
-    if account.disabled {
-        return Err("Account is disabled".to_string());
-    }
-
-    // Fetch quota using the quota module
-    let result = modules::account::fetch_quota_with_retry(account);
-
-    match result.await {
-        Ok(quota) => {
-            // Save the updated quota
-            account.quota = Some(quota.clone());
-            if let Err(e) = modules::account::save_account(account) {
-                warn!("Failed to save account after quota refresh: {}", e);
-            }
-            Ok(quota)
-        }
-        Err(e) => Err(format!("{:?}", e)),
-    }
 }
 
 /// Convert QuotaData to QuotaInfo for API response
