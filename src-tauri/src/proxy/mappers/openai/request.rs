@@ -226,6 +226,7 @@ pub fn transform_openai_request(request: &OpenAIRequest, project_id: &str, mappe
 
             json!({ "role": role, "parts": parts })
         })
+        .filter(|msg| !msg["parts"].as_array().map(|a| a.is_empty()).unwrap_or(true))
         .collect();
 
     // [PR #合并] 合并连续相同角色的消息 (Gemini 强制要求 user/model 交替)

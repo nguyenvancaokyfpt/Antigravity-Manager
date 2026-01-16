@@ -13,6 +13,59 @@ use crate::proxy::server::AppState;
 
 const MAX_RETRY_ATTEMPTS: usize = 3;
 use crate::proxy::session_manager::SessionManager;
+use tokio::time::{sleep, Duration};
+
+/// 重试策略枚举
+#[derive(Debug, Clone)]
+enum RetryStrategy {
+    NoRetry,
+    FixedDelay(Duration),
+    LinearBackoff { base_ms: u64 },
+    ExponentialBackoff { base_ms: u64, max_ms: u64 },
+}
+
+fn determine_retry_strategy(status_code: u16, error_text: &str) -> RetryStrategy {
+    match status_code {
+        429 => {
+            if let Some(delay_ms) = crate::proxy::upstream::retry::parse_retry_delay(error_text) {
+                let actual_delay = delay_ms.saturating_add(200).min(10_000);
+                RetryStrategy::FixedDelay(Duration::from_millis(actual_delay))
+            } else {
+                RetryStrategy::LinearBackoff { base_ms: 1000 }
+            }
+        }
+        503 | 529 => RetryStrategy::ExponentialBackoff { base_ms: 1000, max_ms: 8000 },
+        500 => RetryStrategy::LinearBackoff { base_ms: 500 },
+        401 | 403 => RetryStrategy::FixedDelay(Duration::from_millis(100)),
+        _ => RetryStrategy::NoRetry,
+    }
+}
+
+async fn apply_retry_strategy(strategy: RetryStrategy, attempt: usize, status_code: u16, trace_id: &str) -> bool {
+    match strategy {
+        RetryStrategy::NoRetry => {
+            debug!("[{}] Non-retryable error {}, stopping", trace_id, status_code);
+            false
+        }
+        RetryStrategy::FixedDelay(duration) => {
+            info!("[{}] ⏱️ Retry with fixed delay: status={}, attempt={}/{}", trace_id, status_code, attempt + 1, MAX_RETRY_ATTEMPTS);
+            sleep(duration).await;
+            true
+        }
+        RetryStrategy::LinearBackoff { base_ms } => {
+            let delay = base_ms * (attempt as u64 + 1);
+            info!("[{}] ⏱️ Retry with linear backoff: status={}, attempt={}/{}", trace_id, status_code, attempt + 1, MAX_RETRY_ATTEMPTS);
+            sleep(Duration::from_millis(delay)).await;
+            true
+        }
+        RetryStrategy::ExponentialBackoff { base_ms, max_ms } => {
+             let delay = (base_ms * 2_u64.pow(attempt as u32)).min(max_ms);
+             info!("[{}] ⏱️ Retry with exponential backoff: status={}, attempt={}/{}", trace_id, status_code, attempt + 1, MAX_RETRY_ATTEMPTS);
+             sleep(Duration::from_millis(delay)).await;
+             true
+        }
+    }
+}
 
 pub async fn handle_chat_completions(
     State(state): State<AppState>,
@@ -338,7 +391,7 @@ pub async fn handle_completions(
         body
     );
 
-    let is_codex_style = body.get("input").is_some() && body.get("instructions").is_some();
+    let is_codex_style = body.get("input").is_some() || body.get("instructions").is_some();
 
     // 1. Convert Payload to Messages (Shared Chat Format)
     if is_codex_style {
@@ -587,6 +640,54 @@ pub async fn handle_completions(
     // Actually, due to SSE handling differences (Codex uses different event format), we replicate the loop here or abstract it.
     // For now, let's replicate the core loop but with Codex specific SSE mapping.
 
+    // [Fix Phase 2] Backport normalization logic from handle_chat_completions
+    // Handle "instructions" + "input" (Codex style) -> system + user messages
+    // This is critical because `transform_openai_request` expects `messages` to be populated.
+    
+    // 1. If we have instructions/input, regardless of messages (which might be empty), force normalization.
+    // Logic: if instructions OR input exists, we prefer creating messages from them.
+    let has_codex_fields = body.get("instructions").is_some() || body.get("input").is_some();
+    if has_codex_fields {
+        tracing::debug!("[Codex] Detected Codex-style request (force normalization)");
+        
+        let mut messages = Vec::new();
+        
+        // instructions -> system message
+        if let Some(inst) = body.get("instructions").and_then(|v| v.as_str()) {
+            if !inst.is_empty() {
+                messages.push(json!({
+                    "role": "system",
+                    "content": inst 
+                }));
+            }
+        }
+        
+        // input -> user message
+        if let Some(input) = body.get("input") {
+             // Handle array or string input
+            let content = if let Some(s) = input.as_str() {
+                s.to_string()
+            } else if let Some(arr) = input.as_array() {
+                 // Join array parts
+                 arr.iter().map(|v| v.as_str().unwrap_or("")).collect::<Vec<_>>().join("\n")
+            } else {
+                input.to_string()
+            };
+            
+            if !content.is_empty() {
+                messages.push(json!({
+                    "role": "user",
+                    "content": content
+                }));
+            }
+        }
+        
+        if let Some(obj) = body.as_object_mut() {
+            tracing::debug!("[Codex] Injecting normalized messages: {} messages", messages.len());
+            obj.insert("messages".to_string(), json!(messages));
+        }
+    }
+
     let mut openai_req: OpenAIRequest = serde_json::from_value(body.clone())
         .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid request: {}", e)))?;
 
@@ -613,7 +714,10 @@ pub async fn handle_completions(
 
     let mut last_error = String::new();
 
-    for _attempt in 0..max_attempts {
+    let mut last_email: Option<String> = None;
+    let trace_id = format!("req_{}", chrono::Utc::now().timestamp_subsec_millis());
+
+    for attempt in 0..max_attempts {
         // 1. 模型路由解析
         let mapped_model = crate::proxy::common::model_mapping::resolve_model_route(
             &openai_req.model,
@@ -630,8 +734,16 @@ pub async fn handle_completions(
             &tools_val,
         );
 
+        // 3. 提取 SessionId (复用)
+        // [New] 使用 TokenManager 内部逻辑提取 session_id，支持粘性调度
+        let session_id_str = SessionManager::extract_openai_session_id(&openai_req);
+        let session_id = Some(session_id_str.as_str());
+        
+        // 重试时强制轮换，除非只是简单的网络抖动但 Claude 逻辑里 attempt > 0 总是 force_rotate
+        let force_rotate = attempt > 0;
+
         let (access_token, project_id, email) =
-            match token_manager.get_token(&config.request_type, false, None, &config.final_model).await {
+            match token_manager.get_token(&config.request_type, force_rotate, session_id, &config.final_model).await {
                 Ok(t) => t,
                 Err(e) => {
                     return Err((
@@ -640,15 +752,16 @@ pub async fn handle_completions(
                     ))
                 }
             };
+        
+        last_email = Some(email.clone());
 
         info!("✓ Using account: {} (type: {})", email, config.request_type);
 
         let gemini_body = transform_openai_request(&openai_req, &project_id, &mapped_model);
 
-        // [New] 打印转换后的报文 (Gemini Body) 供调试 (Codex 路径)
-        if let Ok(body_json) = serde_json::to_string_pretty(&gemini_body) {
-            debug!("[Codex-Request] Transformed Gemini Body:\n{}", body_json);
-        }
+        // [New] 打印转换后的报文 (Gemini Body) 供调试 (Codex 路径) ———— 缩减为 simple debug
+        debug!("[Codex-Request] Transformed Gemini Body ({} parts)", 
+           gemini_body.get("contents").and_then(|c| c.as_array()).map(|a| a.len()).unwrap_or(0));
 
         let list_response = openai_req.stream;
         let method = if list_response {
@@ -665,12 +778,16 @@ pub async fn handle_completions(
             Ok(r) => r,
             Err(e) => {
                 last_error = e.clone();
+                debug!("Codex Request failed on attempt {}/{}: {}", attempt + 1, max_attempts, e);
                 continue;
             }
         };
 
         let status = response.status();
         if status.is_success() {
+            // [智能限流] 请求成功，重置该账号的连续失败计数
+            token_manager.mark_account_success(&email);
+
             if list_response {
                 use axum::body::Body;
                 use axum::response::Response;
@@ -732,19 +849,46 @@ pub async fn handle_completions(
 
         // Handle errors and retry
         let status_code = status.as_u16();
-        let error_text = response.text().await.unwrap_or_default();
+        let retry_after = response.headers().get("Retry-After").and_then(|h| h.to_str().ok()).map(|s| s.to_string());
+        let error_text = response.text().await.unwrap_or_else(|_| format!("HTTP {}", status_code));
         last_error = format!("HTTP {}: {}", status_code, error_text);
 
-        if status_code == 429 || status_code == 403 || status_code == 401 {
-            continue;
+        tracing::error!(
+            "[Codex-Upstream] Error Response {}: {}",
+            status_code,
+            error_text
+        );
+
+        // 3. 标记限流状态(用于 UI 显示)
+        if status_code == 429 || status_code == 529 || status_code == 503 || status_code == 500 {
+            token_manager.mark_rate_limited_async(&email, status_code, retry_after.as_deref(), &error_text, Some(&mapped_model)).await;
         }
-        return Err((status, error_text));
+
+        // 确定重试策略
+        let strategy = determine_retry_strategy(status_code, &error_text);
+        
+        if apply_retry_strategy(strategy, attempt, status_code, &trace_id).await {
+            // 继续重试 (loop 会增加 attempt, 导致 force_rotate=true)
+            continue;
+        } else {
+            // 不可重试
+            return Ok((status, [("X-Account-Email", email.as_str())], error_text).into_response());
+        }
     }
 
-    Err((
-        StatusCode::TOO_MANY_REQUESTS,
-        format!("All attempts failed. Last error: {}", last_error),
-    ))
+    // 所有尝试均失败
+    if let Some(email) = last_email {
+        Ok((
+            StatusCode::TOO_MANY_REQUESTS,
+            [("X-Account-Email", email)],
+            format!("All accounts exhausted. Last error: {}", last_error),
+        ).into_response())
+    } else {
+        Ok((
+            StatusCode::TOO_MANY_REQUESTS,
+            format!("All accounts exhausted. Last error: {}", last_error),
+        ).into_response())
+    }
 }
 
 pub async fn handle_list_models(State(state): State<AppState>) -> impl IntoResponse {

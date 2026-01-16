@@ -193,24 +193,20 @@ pub fn resolve_model_route(
 /// 
 /// Returns `None` if the model doesn't match any of the 3 protected categories.
 pub fn normalize_to_standard_id(model_name: &str) -> Option<String> {
+    // [FIX] Strict matching based on user-defined groups (Case Insensitive)
     let lower = model_name.to_lowercase();
-    
-    // Gemini Flash variants
-    if lower.contains("flash") && lower.contains("gemini") {
-        return Some("gemini-3-flash".to_string());
+    match lower.as_str() {
+        // Gemini 3 Flash Group
+        "gemini-3-flash" => Some("gemini-3-flash".to_string()),
+
+        // Gemini 3 Pro High Group
+        "gemini-3-pro-high" | "gemini-3-pro-low" => Some("gemini-3-pro-high".to_string()),
+
+        // Claude 4.5 Sonnet Group
+        "claude-sonnet-4-5" | "claude-sonnet-4-5-thinking" | "claude-opus-4-5-thinking" => Some("claude-sonnet-4-5".to_string()),
+
+        _ => None
     }
-    
-    // Gemini Pro variants (including thinking models)
-    if lower.contains("gemini") && (lower.contains("pro") || lower.contains("1.5-pro") || lower.contains("2.5-pro")) {
-        return Some("gemini-3-pro-preview".to_string());
-    }
-    
-    // Claude Sonnet variants
-    if lower.contains("claude") && lower.contains("sonnet") {
-        return Some("claude-sonnet-4-5".to_string());
-    }
-    
-    None
 }
 
 #[cfg(test)]

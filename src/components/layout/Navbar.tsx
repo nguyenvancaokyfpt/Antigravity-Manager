@@ -3,6 +3,9 @@ import { Sun, Moon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../../stores/useConfigStore';
 
+// Detect if running on Linux platform
+const isLinux = navigator.userAgent.toLowerCase().includes('linux');
+
 function Navbar() {
     const location = useLocation();
     const { t, i18n } = useTranslation();
@@ -27,8 +30,8 @@ function Navbar() {
 
         const newTheme = config.theme === 'light' ? 'dark' : 'light';
 
-        // 如果浏览器支持 View Transition API
-        if ('startViewTransition' in document) {
+        // Use View Transition API if supported, but skip on Linux (may cause crash)
+        if ('startViewTransition' in document && !isLinux) {
             const x = event.clientX;
             const y = event.clientY;
             const endRadius = Math.hypot(
@@ -64,7 +67,7 @@ function Navbar() {
                 );
             });
         } else {
-            // 降级方案：直接切换
+            // Fallback: direct switch (Linux or browsers without View Transition)
             await saveConfig({
                 ...config,
                 theme: newTheme,

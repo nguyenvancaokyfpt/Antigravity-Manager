@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> 专业的 AI 账号管理与协议反代系统 (v3.3.33)
+> 专业的 AI 账号管理与协议反代系统 (v3.3.34)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
@@ -8,7 +8,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.33-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.34-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -205,6 +205,42 @@ print(response.choices[0].message.content)
 ## 📝 开发者与社区
 
 *   **版本演进 (Changelog)**:
+    *   **v3.3.34 (2026-01-16)**:
+        - **OpenAI Codex/Responses 协议修复 (Fix Issue #742)**:
+            - **400 Invalid Argument 彻底修复**:
+                - **问题根源**: `/v1/responses` 等专有接口在请求体中仅包含 `instructions` 或 `input` 而缺失 `messages` 字段时，转换逻辑未覆盖全场景，导致 Gemini 接收到空 Body。
+                - **修复内容**: 在 `handle_completions` 中反向移植了聊天接口的“请求标准化”逻辑。现在系统会强制检测 Codex 特有字段（`instructions`/`input`），即使 `messages` 为空或缺失，也会自动将其转化为标准的 System/User 消息对，确保上游请求合法。
+            - **429/503 高级重试与账号轮换支持**:
+                - **逻辑对齐**: 将 Claude 处理器中验证过的“智能指数退避”与“多维账号轮换”策略完整移植到了 OpenAI Completions 接口。
+                - **效果**: 现在 Codex 接口在遇到限流或服务器过载时，会自动执行毫秒级切换，不再直接抛出错误，极大提升了 VS Code 插件等工具的稳定性。
+            - **会话粘性 (Session Stickiness) 支持**:
+                - **功能扩展**: 补全了 OpenAI 协议下的 `session_id` 提取与调度逻辑。现在无论是 Chat 还是 Codex 接口，只要是同一段对话，系统都会尽量将其调度到同一个 Google 账号上。
+                - **性能红利**: 这将显著提升 Google Prompt Caching 的命中率，从而大幅加快响应速度并节省计算资源。
+        - **Claude 思考签名编码修复 (Fix Issue #726)**:
+            - **问题根源**: 修复了 v3.3.33 中引入的 Regression，该版本错误地对已经 Base64 编码的 `thoughtSignature` 进行了二次编码，导致 Google Vertex AI 无法正确校验签名而返回 `Invalid signature` 错误。
+            - **修复内容**: 移除了 `Thinking`、`ToolUse` 和 `ToolResult` 处理逻辑中多余的 Base64 编码步骤，确保签名以原始格式正确透传给上游。
+            - **影响范围**: 彻底解决了使用 Thinking 模型（如 Claude 4.5 Opus / Sonnet）在多轮对话中触发的 400 签名错误，以及由此导致的 "Error searching files" 任务卡死问题 (Issue #737)。
+        - **API 监控看板刷新修复 (Fix Issue #735)**:
+            - **问题根源**: 修复了 `ProxyMonitor` 组件中因 Closure 导致的事件监听失效问题，该问题导致新请求无法自动显示在列表中。
+            - **修复内容**: 引入 `useRef` 优化事件缓冲逻辑，并新增手动刷新按钮作为备份方案；同时在 Tauri 权限配置中显式允许了事件监听。
+        - **严格分组配额保护修复 (Strict Grouped Quota Protection Fix - Core Thanks to @Mag1cFall PR #746)**:
+            - **问题根源**: 修复了在严格匹配模式下，配额保护逻辑因大小写敏感和前端 UI 键名映射缺失而失效的问题。之前版本中 `gemini-pro` 等 UI 简写键名无法匹配到后端定义的 `gemini-3-pro-high` 严格组。
+            - **修复内容**:
+                - **即时大小写归一化**: 恢复了后端 `normalize_to_standard_id` 的大小写不敏感匹配，确保 `Gemini-3-Pro-High` 等变体能被正确识别。
+                - **UI 键名智能映射**: 在前端 `isModelProtected` 中增加了对 `gemini-pro/flash` 等 UI 列名的自动映射，确保 UI 上的锁图标能正确反映后端保护状态。
+            - **影响范围**: 彻底解决了 Gemini 3 Pro/Flash 和 Claude 4.5 Sonnet 在严格分组模式下的锁图标显示问题，确保配额耗尽时能直观提示用户。
+        - **OpenAI 协议 Usage 统计修复 (Pull Request #749, Thanks to @stillyun)**:
+            - **问题根源**: 在 OpenAI 协议转换过程中，未将 Gemini 返回的 `usageMetadata` 映射到 OpenAI 格式的 `usage` 字段，导致 Kilo 等客户端显示 Token 使用量为 0。
+            - **修复内容**:
+                - **数据模型补全**: 为 `OpenAIResponse` 增加了标准的 `usage` 字段。
+                - **全链路映射**: 实现了从流式 (SSE) 和非流式响应中提取并映射 `prompt_tokens`、`completion_tokens` 及 `total_tokens` 的逻辑。
+            - **影响范围**: 彻底解决了 Kilo Editor、Claude Code 等工具在使用 OpenAI 协议时无法统计 Token 用量的问题。
+        - **Linux 主题切换崩溃修复 (Pull Request #750, Thanks to @infinitete)**:
+            - **修复内容**: 
+                - 在 Linux 平台禁用不兼容的 `setBackgroundColor` 调用。
+                - 针对 WebKitGTK 环境禁用 View Transition API 以防止透明窗口崩溃。
+                - 启动时自动调整 GTK 窗口 alpha 通道以增强稳定性。
+            - **影响范围**: 解决了 Linux 用户在切换深色/浅色模式时可能遇到的程序卡死或硬崩溃问题。
     *   **v3.3.33 (2026-01-15)**:
         - **Codex 兼容性与模型映射修复 (Fix Issue #697)**:
             - **Instructions 参数支持**: 修复了对 `instructions` 参数的处理逻辑，确保其作为系统指令（System Instructions）正确注入，提升与 Codex 等工具的兼容性。
