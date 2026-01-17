@@ -353,7 +353,7 @@ pub async fn warm_up_all_accounts() -> Result<String, String> {
                     let mut account_warmed_series = std::collections::HashSet::new();
                     for m in fresh_quota.models {
                         if m.percentage >= 100 {
-                            let model_to_ping = if m.name == "gemini-2.5-flash" { "gemini-3-flash".to_string() } else { m.name.clone() };
+                            let model_to_ping = m.name.clone();
                             
                             match model_to_ping.as_str() {
                                 "gemini-3-flash" | "claude-sonnet-4-5" | "gemini-3-pro-high" | "gemini-3-pro-image" => {
@@ -473,8 +473,7 @@ pub async fn warm_up_account(account_id: &str) -> Result<String, String> {
 
     for m in fresh_quota.models {
         if m.percentage >= 100 {
-            // 1. 映射逻辑
-            let model_name = if m.name == "gemini-2.5-flash" { "gemini-3-flash".to_string() } else { m.name.clone() };
+            let model_name = m.name.clone();
             
             // 2. 严格白名单过滤
             match model_name.as_str() {

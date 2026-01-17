@@ -201,6 +201,10 @@ pub fn run() {
             // HTTP API 设置命令
             commands::get_http_api_settings,
             commands::save_http_api_settings,
+            proxy::cli_sync::get_cli_sync_status,
+            proxy::cli_sync::execute_cli_sync,
+            proxy::cli_sync::execute_cli_restore,
+            proxy::cli_sync::get_cli_config_content,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -3,6 +3,7 @@
         "loading": "Loading...",
         "load_more": "Load More",
         "add": "Add",
+        "copy": "Copy",
         "action": "Action",
         "save": "Save",
         "saved": "Saved successfully",
@@ -37,6 +38,7 @@
         "dashboard": "Dashboard",
         "accounts": "Accounts",
         "proxy": "API Proxy",
+        "call_records": "Traffic Logs",
         "settings": "Settings",
         "theme_to_dark": "Switch to Dark Mode",
         "theme_to_light": "Switch to Light Mode",
@@ -436,10 +438,10 @@
                     "advanced_tooltip": "Optional exact-match overrides. If an incoming model string matches a rule key, it will be replaced with the mapped z.ai model id.",
                     "from_label": "Incoming model",
                     "to_label": "z.ai model",
-                    "from_placeholder": "e.g. claude-opus-4-5-thinking",
-                    "to_placeholder": "e.g. glm-4.7",
                     "add_rule": "Add",
-                    "empty": "No override rules configured."
+                    "empty": "No override rules configured.",
+                    "from_placeholder": "From (e.g. claude-3-opus)",
+                    "to_placeholder": "To (e.g. glm-4)"
                 },
                 "modes": {
                     "off": "Off",
@@ -464,7 +466,7 @@
             },
             "request_timeout": "Request Timeout",
             "request_timeout_tooltip": "Maximum time (seconds) the proxy waits for an upstream response, including streaming. Increase for long generations; restart required to apply.",
-            "request_timeout_hint": "Default 120s, range 30-3600s. Restart service to apply changes.",
+            "request_timeout_hint": "Default 120s, range 30-7200s. Restart service to apply changes.",
             "enable_logging": "Enable Request Logging",
             "enable_logging_hint": "Record history for debugging (Minor perf cost)",
             "upstream_proxy": {
@@ -616,12 +618,13 @@
             "default_suffix": " (Default)",
             "original_id": "Original ID",
             "route_to": "Route To",
-            "select_target_model": "Select Target Model"
+            "select_target_model": "Select Target Model",
+            "original_placeholder": "Original (e.g. gpt-4 or gpt-4*)"
         },
         "multi_protocol": {
             "title": "Multi-Protocol Support",
-            "subtitle": "Protocol Support",
-            "description": "Proxy service supports both OpenAI and Anthropic API formats to meet different tool requirements",
+            "subtitle": "Seamlessly integrate with your favorite AI tools and CLIs",
+            "description": "The local proxy supports OpenAI, Anthropic, and Gemini protocols, ensuring compatibility with a wide range of applications.",
             "openai_label": "OpenAI Protocol",
             "anthropic_label": "Anthropic Protocol",
             "openai_tools": "Cherry Studio, NextChat",
@@ -629,7 +632,8 @@
             "gemini_label": "Gemini Protocol",
             "gemini_tools": "Google AI SDK, LangChain",
             "quick_integration": "Quick Integration",
-            "click_tip": "👆 Click any model on the left to update this code."
+            "click_tip": "👆 Click a model to update code examples",
+            "copy_base": "Copy Base"
         },
         "supported_models": {
             "title": "Supported Models & Integration",
@@ -637,6 +641,35 @@
             "model_id": "Model ID",
             "description": "Description",
             "action": "Action"
+        },
+        "cli_sync": {
+            "title": "One-click CLI Sync",
+            "subtitle": "Quickly sync current API endpoints and keys to your local AI CLI tools.",
+            "card_title": "{{name}} Config",
+            "status": {
+                "not_installed": "Not detected",
+                "installed": "v{{version}}",
+                "synced": "Pointed to this app",
+                "not_synced": "Not synced",
+                "detecting": "Detecting...",
+                "current_base_url": "Current Base URL"
+            },
+            "btn_sync": "Sync Config Now",
+            "btn_view": "View Config",
+            "btn_restore": "Restore Defaults",
+            "btn_restore_backup": "Restore Backup",
+            "restore_confirm": "Are you sure you want to restore the configuration for {{name}} to the official default URL?",
+            "restore_backup_confirm": "Backup configuration found. Are you sure you want to restore it?",
+            "modal": {
+                "view_title": "{{name}} Config Content",
+                "copy_success": "Config content copied"
+            },
+            "toast": {
+                "sync_success": "Sync successful! {{name}} is ready.",
+                "sync_error": "Sync failed: {{error}}"
+            },
+            "sync_confirm_title": "Sync Confirmation",
+            "sync_confirm_message": "Ready to sync {{name}} configuration. ⚠️ Warning: This will overwrite your existing local configuration files (e.g. login tokens, API Keys). Are you sure you want to continue?"
         }
     },
     "monitor": {

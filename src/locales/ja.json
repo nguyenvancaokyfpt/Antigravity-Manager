@@ -2,6 +2,7 @@
     "common": {
         "loading": "読み込み中...",
         "add": "追加",
+        "copy": "コピー",
         "action": "アクション",
         "save": "保存",
         "saved": "正常に保存されました",
@@ -36,6 +37,7 @@
         "dashboard": "ダッシュボード",
         "accounts": "アカウント",
         "proxy": "APIプロキシ",
+        "call_records": "トラフィックログ",
         "settings": "設定",
         "theme_to_dark": "ダークモードに切り替え",
         "theme_to_light": "ライトモードに切り替え",
@@ -387,10 +389,10 @@
                     "advanced_tooltip": "オプションの完全一致オーバーライド。リクエストモデル文字列がルールキーと一致する場合、マップされたz.aiモデルIDに置き換えられます。",
                     "from_label": "リクエストモデル",
                     "to_label": "z.aiモデル",
-                    "from_placeholder": "例: claude-opus-4-5-thinking",
-                    "to_placeholder": "例: glm-4.7",
                     "add_rule": "追加",
-                    "empty": "オーバーライドルールが構成されていません。"
+                    "empty": "カスタムルールは設定されていません。",
+                    "from_placeholder": "変換元 (例: claude-3-opus)",
+                    "to_placeholder": "変換先 (例: glm-4)"
                 },
                 "modes": {
                     "off": "オフ",
@@ -415,7 +417,7 @@
             },
             "request_timeout": "リクエストタイムアウト",
             "request_timeout_tooltip": "プロキシがアップストリームの応答を待機する最大時間（秒）。長い生成の場合は増やしてください。適用には再起動が必要です。",
-            "request_timeout_hint": "デフォルト 120秒、範囲 30-3600秒。適用には再起動が必要。",
+            "request_timeout_hint": "デフォルト 120秒、範囲 30-7200秒。適用には再起動が必要。",
             "enable_logging": "リクエストのログ記録を有効化",
             "enable_logging_hint": "デバッグ用に履歴を記録 (わずかなパフォーマンス低下あり)",
             "upstream_proxy": {
@@ -567,12 +569,13 @@
             "default_suffix": " (デフォルト)",
             "original_id": "元のID",
             "route_to": "ルーティング先",
-            "select_target_model": "ターゲットモデルを選択"
+            "select_target_model": "ターゲットモデルを選択",
+            "original_placeholder": "元の名称 (例: gpt-4 または gpt-4*)"
         },
         "multi_protocol": {
             "title": "マルチプロトコルサポート",
-            "subtitle": "プロトコルサポート",
-            "description": "プロキシサービスはOpenAIとAnthropicの両方のAPI形式をサポートし、さまざまなツールの要件に対応します",
+            "subtitle": "お気に入りの AI ツールや CLI とシームレスに統合",
+            "description": "ローカルプロキシは OpenAI、Anthropic、および Gemini プロトコルをサポートしており、幅広いアプリケーションとの互換性を確保しています。",
             "openai_label": "OpenAI プロトコル",
             "anthropic_label": "Anthropic プロトコル",
             "openai_tools": "Cherry Studio, NextChat",
@@ -580,7 +583,8 @@
             "gemini_label": "Gemini プロトコル",
             "gemini_tools": "Google AI SDK, LangChain",
             "quick_integration": "クイック統合",
-            "click_tip": "👆 左側のモデルをクリックするとこのコードが更新されます。"
+            "click_tip": "👆 モデルをクリックしてコード例を更新",
+            "copy_base": "コピー Base"
         },
         "supported_models": {
             "title": "サポートモデルと統合",
@@ -588,6 +592,35 @@
             "model_id": "モデルID",
             "description": "説明",
             "action": "操作"
+        },
+        "cli_sync": {
+            "title": "CLI 設定の一括同期",
+            "subtitle": "現在の API エンドポイントとキーをローカルの AI CLI ツールに素早く同期します。",
+            "card_title": "{{name}} 設定",
+            "status": {
+                "not_installed": "未インストール",
+                "installed": "v{{version}}",
+                "synced": "同期済み",
+                "not_synced": "未同期",
+                "detecting": "検出中...",
+                "current_base_url": "現在のベースURL"
+            },
+            "btn_sync": "今すぐ同期",
+            "btn_view": "設定を表示",
+            "btn_restore": "デフォルトに戻す",
+            "btn_restore_backup": "バックアップを復元",
+            "restore_backup_confirm": "バックアップ設定が見つかりました。復元してもよろしいですか？",
+            "sync_confirm_title": "同期の確認",
+            "sync_confirm_message": "{{name}} の設定を同期する準備ができました。⚠️ 注意：これにより、既存のローカル設定ファイル（ログイントークン、APIキーなど）が上書きされます。続行してもよろしいですか？",
+            "restore_confirm": "{{name}} の設定を公式のデフォルトURLに復元してもよろしいですか？",
+            "modal": {
+                "view_title": "{{name}} 設定ファイルの内容",
+                "copy_success": "設定内容をコピーしました"
+            },
+            "toast": {
+                "sync_success": "同期に成功しました！{{name}} の準備が整いました。",
+                "sync_error": "同期に失敗しました：{{error}}"
+            }
         }
     },
     "monitor": {

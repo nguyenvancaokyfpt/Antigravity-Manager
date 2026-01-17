@@ -53,19 +53,15 @@ const LogTable: React.FC<LogTableProps> = ({
     return (
         <div
             className="flex-1 overflow-y-auto overflow-x-auto bg-white dark:bg-base-100"
-            style={{
-                minHeight: '200px',
-                maxHeight: 'calc(100vh - 320px)'
-            }}
         >
             <table className="table table-xs w-full">
                 <thead className="bg-gray-50 dark:bg-base-200 text-gray-500 sticky top-0 z-10">
                     <tr>
                         <th style={{ width: '60px' }}>{t('monitor.table.status')}</th>
                         <th style={{ width: '60px' }}>{t('monitor.table.method')}</th>
-                        <th style={{ width: '180px' }}>{t('monitor.table.model')}</th>
+                        <th style={{ width: '260px' }}>{t('monitor.table.model')}</th>
                         <th style={{ width: '140px' }}>{t('monitor.table.account')}</th>
-                        <th>{t('monitor.table.path')}</th>
+                        <th style={{ width: '180px' }}>{t('monitor.table.path')}</th>
                         <th className="text-right" style={{ width: '90px' }}>{t('monitor.table.usage')}</th>
                         <th className="text-right" style={{ width: '80px' }}>{t('monitor.table.duration')}</th>
                         <th className="text-right" style={{ width: '80px' }}>{t('monitor.table.time')}</th>
@@ -84,7 +80,7 @@ const LogTable: React.FC<LogTableProps> = ({
                                 </span>
                             </td>
                             <td className="font-bold" style={{ width: '60px' }}>{log.method}</td>
-                            <td className="text-blue-600 truncate" style={{ width: '180px', maxWidth: '180px' }}>
+                            <td className="text-blue-600 truncate" style={{ width: '260px', maxWidth: '260px' }}>
                                 {log.mapped_model && log.model !== log.mapped_model
                                     ? `${log.model} => ${log.mapped_model}`
                                     : (log.model || '-')}
@@ -92,7 +88,7 @@ const LogTable: React.FC<LogTableProps> = ({
                             <td className="text-gray-600 dark:text-gray-400 truncate text-[10px]" style={{ width: '140px', maxWidth: '140px' }}>
                                 {log.account_email ? log.account_email.replace(/(.{3}).*(@.*)/, '$1***$2') : '-'}
                             </td>
-                            <td className="truncate" style={{ maxWidth: '280px' }}>{log.url}</td>
+                            <td className="truncate" style={{ width: '180px', maxWidth: '180px' }}>{log.url}</td>
                             <td className="text-right text-[9px]" style={{ width: '90px' }}>
                                 {log.input_tokens != null && <div>I: {formatCompactNumber(log.input_tokens)}</div>}
                                 {log.output_tokens != null && <div>O: {formatCompactNumber(log.output_tokens)}</div>}
@@ -193,6 +189,8 @@ export const ProxyMonitor: React.FC<ProxyMonitorProps> = ({ className }) => {
 
             if (Array.isArray(history)) {
                 setLogs(history);
+                // Clear pending logs to avoid duplicates (database data is authoritative)
+                pendingLogsRef.current = [];
             }
 
             const currentStats = await Promise.race([
@@ -237,16 +235,28 @@ export const ProxyMonitor: React.FC<ProxyMonitorProps> = ({ className }) => {
     };
 
     const pendingLogsRef = useRef<ProxyRequestLog[]>([]);
+    const listenerSetupRef = useRef(false);
+    const isMountedRef = useRef(true);
 
     useEffect(() => {
+        isMountedRef.current = true;
         loadData();
+        
         let unlistenFn: (() => void) | null = null;
         let updateTimeout: number | null = null;
 
         const setupListener = async () => {
+            // Prevent duplicate listener registration (React 18 StrictMode)
+            if (listenerSetupRef.current) {
+                console.debug('[ProxyMonitor] Listener already set up, skipping...');
+                return;
+            }
+            listenerSetupRef.current = true;
+            
             console.debug('[ProxyMonitor] Setting up event listener for proxy://request');
             unlistenFn = await listen<ProxyRequestLog>('proxy://request', (event) => {
-                // console.debug('[ProxyMonitor] Received event:', event);
+                if (!isMountedRef.current) return;
+                
                 const newLog = event.payload;
 
                 // 移除 body 以减少内存占用
@@ -256,25 +266,45 @@ export const ProxyMonitor: React.FC<ProxyMonitorProps> = ({ className }) => {
                     response_body: undefined
                 };
 
-                // 添加到待处理队列 (Use Ref to avoid closure staleness)
+                // Check if this log already exists (deduplicate at event level)
+                const alreadyExists = pendingLogsRef.current.some(log => log.id === newLog.id);
+                if (alreadyExists) {
+                    console.debug('[ProxyMonitor] Duplicate event ignored:', newLog.id);
+                    return;
+                }
+
                 pendingLogsRef.current.push(logSummary);
 
                 // 防抖:每 500ms 批量更新一次
                 if (updateTimeout) clearTimeout(updateTimeout);
-                updateTimeout = setTimeout(() => {
+                updateTimeout = setTimeout(async () => {
+                    if (!isMountedRef.current) return;
+                    
                     const currentPending = pendingLogsRef.current;
                     if (currentPending.length > 0) {
-                        setLogs(prev => [...currentPending, ...prev].slice(0, 100)); // 1000 → 100
-
-                        // 批量更新统计
-                        setStats((prev: ProxyStats) => {
-                            const successCount = currentPending.filter(log => log.status >= 200 && log.status < 400).length;
-                            return {
-                                total_requests: prev.total_requests + currentPending.length,
-                                success_count: prev.success_count + successCount,
-                                error_count: prev.error_count + (currentPending.length - successCount),
-                            };
+                        setLogs(prev => {
+                            // Deduplicate by id
+                            const existingIds = new Set(prev.map(log => log.id));
+                            const uniqueNewLogs = currentPending.filter(log => !existingIds.has(log.id));
+                            // Merge and sort by timestamp descending (newest first)
+                            const merged = [...uniqueNewLogs, ...prev];
+                            merged.sort((a, b) => b.timestamp - a.timestamp);
+                            return merged.slice(0, 100);
                         });
+
+                        // Fetch stats and total count from backend instead of local calculation
+                        try {
+                            const [currentStats, count] = await Promise.all([
+                                invoke<ProxyStats>('get_proxy_stats'),
+                                invoke<number>('get_proxy_logs_count_filtered', { filter: '', errorsOnly: false })
+                            ]);
+                            if (isMountedRef.current) {
+                                if (currentStats) setStats(currentStats);
+                                setTotalCount(count);
+                            }
+                        } catch (e) {
+                            console.error('Failed to fetch stats:', e);
+                        }
 
                         pendingLogsRef.current = [];
                     }
@@ -282,7 +312,10 @@ export const ProxyMonitor: React.FC<ProxyMonitorProps> = ({ className }) => {
             });
         };
         setupListener();
+        
         return () => {
+            isMountedRef.current = false;
+            listenerSetupRef.current = false;
             if (unlistenFn) unlistenFn();
             if (updateTimeout) clearTimeout(updateTimeout);
         };
@@ -327,6 +360,7 @@ export const ProxyMonitor: React.FC<ProxyMonitorProps> = ({ className }) => {
             await invoke('clear_proxy_logs');
             setLogs([]);
             setStats({ total_requests: 0, success_count: 0, error_count: 0 });
+            setTotalCount(0);
         } catch (e) {
             console.error("Failed to clear logs", e);
         }
