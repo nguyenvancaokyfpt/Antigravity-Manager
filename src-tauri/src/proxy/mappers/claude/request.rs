@@ -742,7 +742,7 @@ fn build_system_instruction(system: &Option<SystemPrompt>, _model_name: &str, ha
 fn build_contents(
     content: &MessageContent,
     is_assistant: bool,
-    claude_req: &ClaudeRequest,
+    _claude_req: &ClaudeRequest,
     is_thinking_enabled: bool,
     session_id: &str,
     allow_dummy_thought: bool,
@@ -918,10 +918,22 @@ fn build_contents(
                         }
                     }
                     ContentBlock::ToolUse { id, name, input, signature, .. } => {
+                        let mut final_input = input.clone();
+                        
+                        // [CRITICAL FIX] Shell tool command must be an array of strings
+                        if name == "local_shell_call" {
+                            if let Some(command) = final_input.get_mut("command") {
+                                if let Value::String(s) = command {
+                                    tracing::info!("[Claude-Request] Converting shell command string to array: {}", s);
+                                    *command = json!([s]);
+                                }
+                            }
+                        }
+
                         let mut part = json!({
                             "functionCall": {
                                 "name": name,
-                                "args": input,
+                                "args": final_input,
                                 "id": id
                             }
                         });
@@ -1017,7 +1029,6 @@ fn build_contents(
                                             }
                                         }
                                     };
-
                                     if should_use_sig {
                                         part["thoughtSignature"] = json!(sig);
                                     }
@@ -1027,6 +1038,14 @@ fn build_contents(
                                         id, sig.len()
                                     );
                                 }
+                            }
+                        } else {
+                            // [NEW] Handle missing signature for Gemini thinking models
+                            // Use skip_thought_signature_validator as a sentinel value
+                            let is_google_cloud = mapped_model.starts_with("projects/");
+                            if is_thinking_enabled && !is_google_cloud {
+                                tracing::debug!("[Tool-Signature] Adding GEMINI_SKIP_SIGNATURE for tool_use: {}", id);
+                                part["thoughtSignature"] = json!("skip_thought_signature_validator");
                             }
                         }
                         parts.push(part);
@@ -1536,12 +1555,26 @@ fn build_generation_config(
     }*/
 
     // max_tokens 映射为 maxOutputTokens
-    config["maxOutputTokens"] = json!(64000);
+    let mut final_max_tokens = 16384;
+    
+    // [NEW] 确保 maxOutputTokens 大于 thinkingBudget (API 强约束)
+    if let Some(thinking_config) = config.get("thinkingConfig") {
+        if let Some(budget) = thinking_config.get("thinkingBudget").and_then(|t| t.as_u64()) {
+            if final_max_tokens <= budget as i64 {
+                final_max_tokens = (budget + 8192) as i64;
+                tracing::info!(
+                    "[Generation-Config] Bumping maxOutputTokens to {} due to thinking budget of {}", 
+                    final_max_tokens, budget
+                );
+            }
+        }
+    }
+    
+    config["maxOutputTokens"] = json!(final_max_tokens);
 
-    // [优化] 设置全局停止序列,防止流式输出冗余
+    // [优化] 设置全局停止序列,防止流式输出冗余 (控制在 4 个以内)
     config["stopSequences"] = json!([
         "<|user|>",
-        "<|endoftext|>",
         "<|end_of_turn|>",
         "[DONE]",
         "\n\nHuman:"

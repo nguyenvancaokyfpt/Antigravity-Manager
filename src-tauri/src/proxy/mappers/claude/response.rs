@@ -36,8 +36,9 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
 
     if let Some(obj) = args.as_object_mut() {
         // [IMPROVED] Case-insensitive matching for tool names
+        // [IMPROVED] Case-insensitive matching for tool names
         match tool_name.to_lowercase().as_str() {
-            "grep" => {
+            "grep" | "search" | "search_code_definitions" | "search_code_snippets" => {
                 // [FIX #546] Gemini hallucination: maps parameter description to "description" field
                 if let Some(desc) = obj.remove("description") {
                     if !obj.contains_key("pattern") {
@@ -118,6 +119,18 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                     }
                 }
 
+                // [NEW] Glob-to-Inclusion Migration: if pattern looks like a glob, move to inclusion
+                if let Some(pattern) = obj.get("pattern").and_then(|v| v.as_str()) {
+                    if pattern.contains('*') || pattern.contains('?') || pattern.contains("**") {
+                        if !obj.contains_key("include") {
+                            let glob = pattern.to_string();
+                            obj.insert("include".to_string(), serde_json::json!(glob));
+                            obj.insert("pattern".to_string(), serde_json::json!(""));
+                            tracing::debug!("[Response] Migrated glob pattern to inclusion: '{}'", glob);
+                        }
+                    }
+                }
+
                 // [FIX #547] Coerce all known boolean parameters from string to bool
                 let bool_params = ["ignoreCase", "lineNumbers", "caseSensitive", "regex", "wholeWord"];
                 for param in bool_params {
@@ -186,7 +199,24 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                  }
             }
             other => {
-                 tracing::debug!("[Response] Unmapped tool call: {} (args: {:?})", other, obj.keys());
+                 // [NEW] [Issue #785] Generic Property Mapping for all tools
+                 // If a tool has "paths" (array of 1) but no "path", convert it.
+                 let mut path_to_inject = None;
+                 if !obj.contains_key("path") {
+                     if let Some(paths) = obj.get("paths").and_then(|v| v.as_array()) {
+                         if paths.len() == 1 {
+                             if let Some(p) = paths[0].as_str() {
+                                 path_to_inject = Some(p.to_string());
+                             }
+                         }
+                     }
+                 }
+                 
+                 if let Some(path) = path_to_inject {
+                     obj.insert("path".to_string(), serde_json::json!(path));
+                     tracing::debug!("[Response] Probabilistic fix for tool '{}': paths[0] → path(\"{}\")", other, path);
+                 }
+                 tracing::debug!("[Response] Unmapped tool call processed via generic rules: {} (keys: {:?})", other, obj.keys());
             }
         }
     }
@@ -318,14 +348,22 @@ impl NonStreamingProcessor {
                 )
             });
 
+            let mut tool_name = fc.name.clone();
+            if tool_name.to_lowercase() == "search" {
+                tool_name = "grep".to_string();
+                tracing::debug!("[Response] Normalizing tool name: Search → grep");
+            }
+
             // [FIX] Remap args for Gemini → Claude compatibility
             let mut args = fc.args.clone().unwrap_or(serde_json::json!({}));
-            remap_function_call_args(&fc.name, &mut args);
+            
+            let mut tool_name_lower = tool_name.to_lowercase();
+            remap_function_call_args(&tool_name_lower, &mut args);
 
             let mut tool_use = ContentBlock::ToolUse {
                 id: tool_id,
-                name: fc.name.clone(),
-                input: args,
+                name: tool_name,
+                input: args.clone(),
                 signature: None,
                 cache_control: None,
             };
