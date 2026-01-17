@@ -237,6 +237,10 @@
             "auto_sync_desc": "Mevcut aktif hesap bilgilerini periyodik olarak otomatik senkronize et",
             "sync_interval": "Senkronizasyon Aralığı (saniye)"
         },
+        "pinned_quota_models": {
+            "title": "Sabitlenmiş Kota Modelleri",
+            "desc": "Hesap listesinde hangi model kotalarının görüntüleneceğini seçin. Seçilmeyen modeller yalnızca detay açılır penceresinde gösterilir"
+        },
         "proxy": {
             "title": "Proxy Ayarları"
         },

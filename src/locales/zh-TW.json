@@ -273,6 +273,10 @@
             "example": "示例：設定 {{percentage}}% 時，{{total}} 次配額的帳號剩餘 ≤ {{threshold}} 次時將被自動停用",
             "auto_restore_info": "配額重置後將自動重新啟用帳號"
         },
+        "pinned_quota_models": {
+            "title": "配額關注列表",
+            "desc": "選擇要在帳號列表外層顯示的模型配額，未選中的模型只在詳情彈窗中顯示"
+        },
         "proxy": {
             "title": "代理設定"
         },

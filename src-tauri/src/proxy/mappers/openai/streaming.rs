@@ -42,6 +42,7 @@ pub fn store_thought_signature(sig: &str) {
 }
 
 /// 获取全局存储的 thoughtSignature（不清除）
+#[allow(dead_code)]
 pub fn get_thought_signature() -> Option<String> {
     if let Ok(guard) = get_thought_sig_storage().lock() {
         guard.clone()
@@ -562,7 +563,7 @@ pub fn create_codex_sse_stream(
         let mut full_content = String::new();
         let mut emitted_tool_calls = std::collections::HashSet::new();
         let mut last_finish_reason = "stop".to_string();
-        let mut accumulated_usage: Option<super::models::OpenAIUsage> = None;
+        let mut _accumulated_usage: Option<super::models::OpenAIUsage> = None;
 
         while let Some(item) = gemini_stream.next().await {
             match item {
@@ -582,7 +583,7 @@ pub fn create_codex_sse_stream(
                                 
                                 // Capture usageMetadata if present
                                 if let Some(u) = actual_data.get("usageMetadata") {
-                                    accumulated_usage = extract_usage_metadata(u);
+                                    _accumulated_usage = extract_usage_metadata(u);
                                 }
                                 
                                 // Capture finish reason

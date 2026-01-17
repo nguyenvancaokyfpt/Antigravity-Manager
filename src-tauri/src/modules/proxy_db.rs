@@ -448,6 +448,7 @@ pub fn get_all_logs_for_export() -> Result<Vec<ProxyRequestLog>, String> {
 }
 
 /// Get logs by ID list with full details for export
+#[allow(dead_code)]
 pub fn get_logs_by_ids(ids: &[String]) -> Result<Vec<ProxyRequestLog>, String> {
     if ids.is_empty() {
         return Ok(Vec::new());

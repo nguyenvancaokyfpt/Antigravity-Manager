@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> 专业的 AI 账号管理与协议反代系统 (v3.3.37)
+> 专业的 AI 账号管理与协议反代系统 (v3.3.38)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
@@ -8,7 +8,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.37-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.38-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -205,14 +205,27 @@ print(response.choices[0].message.content)
 ## 📝 开发者与社区
 
 *   **版本演进 (Changelog)**:
+    *   **v3.3.38 (2026-01-17)**:
+        - **CLI 同步增强与探测修复 (Fix CLI-Sync Detection)**:
+            - **探测路径扩展**: 优化了二进制检测逻辑。新增对 `~/.local/bin` (curl 安装常用路径)、`~/.npm-global/bin` 以及 `~/bin` 的扫描。
+            - **nvm 多版本支持**: 引入对 `nvm` 目录的深度扫描，支持自动识别不同 Node.js 版本下安装的 CLI 工具，彻底解决 M1 芯片用户手动安装检测不到的问题。
+            - **原子化文件操作**: 采用临时文件写入 + 原子替换机制，确保同步过程中断不会损坏原始配置文件。
+        - **Thinking Signature 深度修复与会话自愈 (Fix Issue #752)**:
+            - **鲁棒重试逻辑**: 修正了重试计次逻辑，确保单账号用户在遇到签名错误时也能触发内部重试，提高了自动修复的触发率。
+            - **主动签名剥离**: 引入 `is_retry`状态，在重试请求中强制剥离所有历史签名。配合严苛的模型家族校验（Gemini 1.5/2.0 不再混用签名），彻底杜绝了无效签名导致的 400 错误。
+            - **会话自愈 (Session Healing)**: 针对剥离签名后可能出现的“裸工具结果”结构错误，实现了智能消息注入机制，通过合成上下文满足 Vertex AI 的结构校验限制。
+        - **配额关注列表 (Fix PR #783)**:
+            - **自定义显示**: 在「设置 -> 账号」中新增模型配额关注列表，支持用户自定义主表格显示的特定模型配额，未选中模型仅在详情弹窗中展示。
+            - **布局优化**: 针对该板块实现了响应式 4 列网格布局，并在 UI 风格上与“额度保护”保持一致。
+        - **中转稳定性增强**: 增强了对 529 Overloaded 等上游过载错误的识别与退避重试，提升了极端负载下的任务成功率。
     *   **v3.3.37 (2026-01-17)**:
         - **后端兼容性修复 (Fix PR #772)**:
             - **向后兼容性增强**: 为 `StickySessionConfig` 添加了 `#[serde(default)]` 属性，确保旧版本的配置文件（缺少粘性会话字段）能够被正确加载，避免了反序列化错误。
         - **用户体验优化 (Fix PR #772)**:
             - **配置加载体验升级**: 在 `ApiProxy.tsx` 中引入了独立的加载状态和错误处理机制。现在，在获取配置时用户会看到加载动画，如果加载失败，系统将展示明确的错误信息并提供重试按钮，取代了之前的空白或错误状态。
-214:         - **macOS Monterey 沙盒权限修复 (Fix Issue #468)**:
-215:             - **问题根源**: 在 macOS Monterey (12.x) 等旧版本系统上，应用沙盒策略阻止了读取全局偏好设置 (`kCFPreferencesAnyApplication`)，导致无法正确检测默认浏览器，进而拦截了 OAuth 跳转。
-216:             - **修复内容**: 在 `Entitlements.plist` 中添加了 `com.apple.security.temporary-exception.shared-preference.read-only` 权限例外，显式允许读取全局配置。
+        - **macOS Monterey 沙盒权限修复 (Fix Issue #468)**:
+            - **问题根源**: 在 macOS Monterey (12.x) 等旧版本系统上，应用沙盒策略阻止了读取全局偏好设置 (`kCFPreferencesAnyApplication`)，导致无法正确检测默认浏览器，进而拦截了 OAuth 跳转。
+            - **修复内容**: 在 `Entitlements.plist` 中添加了 `com.apple.security.temporary-exception.shared-preference.read-only` 权限例外，显式允许读取全局配置。
     *   **v3.3.36 (2026-01-17)**:
         - **Claude 协议核心稳定性修复**:
             - **修复 "回复 OK" 死循环 (History Poisoning Fix)**:

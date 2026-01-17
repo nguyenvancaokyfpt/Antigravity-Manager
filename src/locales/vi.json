@@ -271,6 +271,10 @@
             "example": "Ví dụ: Tại {{percentage}}%, tài khoản có tổng hạn mức {{total}} sẽ bị vô hiệu hóa khi còn lại ≤ {{threshold}}",
             "auto_restore_info": "Tài khoản sẽ tự động được bật lại khi hạn mức hồi phục"
         },
+        "pinned_quota_models": {
+            "title": "Model Hạn mức Đã ghim",
+            "desc": "Chọn hạn mức model nào hiển thị trong danh sách tài khoản. Model không được chọn chỉ hiển thị trong popup chi tiết"
+        },
         "proxy": {
             "title": "Cài đặt Proxy"
         },

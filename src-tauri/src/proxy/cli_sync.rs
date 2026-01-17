@@ -7,6 +7,7 @@ use std::fs;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
+#[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -118,9 +119,31 @@ pub fn check_cli_installed(app: &CliApp) -> (bool, Option<String>) {
     // [FIX #765] macOS 增强检测: 如果 which 失败,显式搜索常用二进制路径
     // 解决 Tauri 进程 PATH 可能不完整导致检测不到已安装 CLI 的问题
     if !installed && !cfg!(target_os = "windows") {
-        let common_paths = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"];
+        let home = dirs::home_dir().unwrap_or_default();
+        let mut common_paths = vec![
+            home.join(".local/bin"),
+            home.join(".npm-global/bin"),
+            home.join("bin"),
+            PathBuf::from("/opt/homebrew/bin"),
+            PathBuf::from("/usr/local/bin"),
+            PathBuf::from("/usr/bin"),
+        ];
+
+        // 增强：扫描 nvm 目录下的所有 node 版本
+        let nvm_base = home.join(".nvm/versions/node");
+        if nvm_base.exists() {
+            if let Ok(entries) = std::fs::read_dir(&nvm_base) {
+                for entry in entries.flatten() {
+                    let bin_path = entry.path().join("bin");
+                    if bin_path.exists() {
+                        common_paths.push(bin_path);
+                    }
+                }
+            }
+        }
+
         for path in common_paths {
-            let full_path = std::path::Path::new(path).join(cmd);
+            let full_path = path.join(cmd);
             if full_path.exists() {
                 tracing::debug!("[CLI-Sync] Detected {} via explicit path: {:?}", cmd, full_path);
                 installed = true;
@@ -173,9 +196,7 @@ pub fn get_sync_status(app: &CliApp, proxy_url: &str) -> (bool, bool, Option<Str
     let mut current_base_url = None;
 
     for file in &files {
-        // 检查是否有备份文件
-        let backup_path = file.path.with_extension(format!("{}{}", file.path.extension().unwrap_or_default().to_string_lossy(), ".antigravity.bak"));
-        // 或者更简单的命名规则: original_name + .antigravity.bak
+        // 使用更简单的命名规则: original_name + .antigravity.bak
         let backup_path = file.path.with_file_name(format!("{}.antigravity.bak", file.name));
         
         if backup_path.exists() {

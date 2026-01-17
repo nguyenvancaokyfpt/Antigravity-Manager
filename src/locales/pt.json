@@ -273,6 +273,10 @@
             "example": "Exemplo: Em {{percentage}}%, uma conta com {{total}} de cota será desabilitada quando restante ≤ {{threshold}}",
             "auto_restore_info": "A conta será automaticamente reabilitada quando a cota for redefinida"
         },
+        "pinned_quota_models": {
+            "title": "Modelos de Cota Fixados",
+            "desc": "Selecione quais cotas de modelo exibir na lista de contas. Modelos não selecionados são mostrados apenas no pop-up de detalhes"
+        },
         "proxy": {
             "title": "Configurações do Proxy"
         },

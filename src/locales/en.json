@@ -278,6 +278,10 @@
             "example": "Example: At {{percentage}}%, an account with {{total}} quota will be disabled when remaining ≤ {{threshold}}",
             "auto_restore_info": "Account will be automatically re-enabled when quota resets"
         },
+        "pinned_quota_models": {
+            "title": "Pinned Quota Models",
+            "desc": "Choose which model quotas to display in the account list. Unselected models are only shown in the detail popup."
+        },
         "proxy": {
             "title": "Proxy Settings"
         },
