@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> 专业的 AI 账号管理与协议反代系统 (v3.3.39)
+> 专业的 AI 账号管理与协议反代系统 (v3.3.45)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
@@ -8,7 +8,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.39-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.45-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -131,6 +131,13 @@ brew install --cask antigravity-tools
 *   **Windows**: `.msi` 或 便携版 `.zip`
 *   **Linux**: `.deb` 或 `AppImage`
 
+### 选项 C: Arch Linux (官方脚本)
+我们为 Arch Linux 用户提供了一个官方的一键安装脚本，它会自动从 GitHub 获取最新版本并完成安装：
+```bash
+curl -sSL https://raw.githubusercontent.com/lbjlaq/Antigravity-Manager/main/deploy/arch/install.sh | bash
+```
+> **提示**: 该脚本会自动下载最新的 `.deb` 资产并使用 `makepkg` 进行安装。
+
 ### 选项 C: 远程服务器部署 (Headless Linux)
 如果您需要在无界面的远程 Linux 服务器（如 Ubuntu/Debian/CentOS）上运行，可以使用我们提供的 **Headless (Xvfb)** 一键部署方案：
 
@@ -139,6 +146,23 @@ curl -fsSL https://raw.githubusercontent.com/lbjlaq/Antigravity-Manager/main/dep
 ```
 > **注意**: 该方案通过 Xvfb 模拟图形环境，资源占用（内存/CPU）会高于纯后端应用。
 > **详情见**: [服务器部署指南 (deploy/headless-xvfb)](./deploy/headless-xvfb/README.md)
+
+### 选项 D: Docker 部署 (推荐用于 NAS/服务器)
+如果您希望在容器化环境中运行，我们提供了完整的 Docker 镜像和配置，内置 noVNC 支持，可通过浏览器直接访问图形界面。
+
+```bash
+# 1. 进入部署目录
+cd deploy/docker
+
+# 2. 启动服务
+docker compose up -d
+```
+> **访问地址**: `http://localhost:6080/vnc_lite.html` (默认 VNC 密码: `password`)
+> **系统要求**:
+> - **内存**: 建议 **2GB** (最小 512MB)。
+> - **共享内存**: 需设置 `shm_size: 2gb` (已在 compose 中配置)，防止浏览器崩溃。
+> - **架构**: 支持 x86_64 和 ARM64。
+> **详情见**: [Docker 部署指南 (deploy/docker)](./deploy/docker/README.md)
 
 ---
 
@@ -205,6 +229,92 @@ print(response.choices[0].message.content)
 ## 📝 开发者与社区
 
 *   **版本演进 (Changelog)**:
+    *   **v3.3.45 (2026-01-19)**:
+        - **[核心功能] 彻底解决 Claude/Gemini SSE 中断与 0-token 响应问题 (Issue #859)**:
+            - **增强型预读 (Peek) 逻辑**: 在向客户端发送 200 OK 响应前，代理现在会循环预读并跳过所有心跳包（SSE ping）及空数据块，确认收到有效业务内容后再建立连接。
+            - **智能重试触发**: 若在预读阶段检测到空响应、超时（60s）或流异常中断，系统将自动触发账号轮换和重试机制，解决了长延迟模型下的静默失败。
+            - **协议一致性增强**: 为 Gemini 协议补齐了缺失的预读逻辑；同时将 Claude 心跳间隔优化为 30s，减少了生成长文本时的连接干扰。
+        - **[核心功能] 固定账号模式集成 (PR #842)**:
+            - **后端增强**: 在代理核心中引入了 `preferred_account_id` 支持，允许通过 API 或 UI 强制锁定特定账号进行请求调度。
+            - **UI 交互更新**: 在 API 反代页面新增“固定账号”切换与账号选择器，支持实时锁定当前会话的出口账号。
+            - **调度优化**: 在“固定账号模式”下优先级高于传统轮询，确保特定业务场景下的会话连续性。
+        - **[国际化] 全语言翻译补全与清理**:
+            - **8 语言覆盖**: 补全了中、英、繁中、日、土、越、葡、俄等 8 种语言中关于“固定账号模式”的所有 i18n 翻译项。
+            - **冗余清理**: 修复了 `ja.json` 和 `vi.json` 中由于历史 PR 累积导致的重复键（Duplicate Keys）警告，提升了翻译规范性。
+            - **标点同步**: 统一清除了各语言翻译中误用的全角标点，确保 UI 展示的一致性。
+        - **[核心功能] 客户端热更新与 Token 统计系统 (PR #846 by @lengjingxu)**:
+            - **热更新 (Native Updater)**: 集成 Tauri v2 原生更新插件，支持自动检测、下载、安装及重启，实现客户端无感升级。
+            - **Token 消费可视化**: 新增基于 SQLite 实现的 Token 统计持久化模块，支持按小时/日/周维度查看总消耗及各账号占比。
+            - **UI/UX 增强**: 优化了图表悬浮提示 (Tooltip) 在深色模式下的对比度，隐藏了冗余的 hover 高亮；补全了 8 语言完整翻译并修复了硬编码图例。
+            - **集成修复**: 在本地合并期间修复了 PR 原始代码中缺失插件配置导致的启动崩溃故障。
+        - **[系统加速] 启用清华大学 (TUNA) 镜像源**: 优化了 Dockerfile 构建流程，大幅提升国内环境下的插件安装速度。
+        - **[部署优化] 官方 Docker 与 noVNC 支持 (PR #851)**:
+            - **全功能容器化**: 为 headless 环境提供完整的 Docker 部署方案，内置 Openbox 桌面环境。
+            - **Web VNC 集成**: 集成 noVNC，支持通过浏览器直接访问图形界面进行 OAuth 授权（内置 Firefox ESR）。
+            - **自愈启动流**: 优化了 `start.sh` 启动逻辑，支持自动清理 X11 锁文件及服务崩溃自动退出，提升生产环境稳定性。
+            - **多语言适配**: 内置 CJK 字体，确保 Docker 环境下中文字符正常显示。
+            - **资源限制优化**: 统一设置 `shm_size: 2gb`，彻底解决容器内浏览器及图形界面崩溃问题。
+        - **[核心功能] 修复账号切换时的设备指纹同步问题**:
+            - **路径探测改进**: 优化了 `storage.json` 的探测时机，确保在进程关闭前准确获取路径，兼容自定义数据目录。
+            - **自动隔离生成**: 针对未绑定指纹的账号，在切换时会自动生成并绑定唯一的设备标识，实现账号间的彻底指纹隔离。
+        - **[UI 修复] 修复账号管理页条数显示不准确问题 (Issue #754)**:
+            - **逻辑修正**: 强制分页条数默认最低为 10 条，解决了小窗口下自动变为 5 条或 9 条的不直觉体验。
+            - **持久化增强**: 实现了分页大小的 `localStorage` 持久化，用户手动选择的条数将永久锁定并覆盖自动模式。
+            - **UI 一致性**: 确保右下角分页选项与列表实际展示条数始终保持一致。
+    *   **v3.3.44 (2026-01-19)**:
+        - **[核心稳定性] 动态思维剥离 (Dynamic Thinking Stripping) - 彻底解决 Prompt 过长与签名错误**:
+            - **问题背景**: 在 Deep Thinking 模式下,长对话会导致两类致命错误:
+                - `Prompt is too long`: 历史 Thinking Block 累积导致 Token 超限
+                - `Invalid signature`: 代理重启后内存签名缓存丢失,旧签名被 Google 拒收
+            - **解决方案 - Context Purification (上下文净化)**:
+                - **新增 `ContextManager` 模块**: 实现 Token 估算与历史清洗逻辑
+                - **分级清洗策略**:
+                    - `Soft` (60%+ 压力): 保留最近 2 轮 Thinking,剥离更早历史
+                    - `Aggressive` (90%+ 压力): 移除所有历史 Thinking Block
+                - **差异化限额**: Flash 模型 (1M) 与 Pro 模型 (2M) 采用不同触发阈值
+                - **签名同步清除**: 清洗 Thinking 时自动移除 `thought_signature`,避免签名校验失败
+            - **透明度增强**: 响应头新增 `X-Context-Purified: true` 标识,便于调试
+            - **性能优化**: 基于字符数的轻量级 Token 估算,对请求延迟影响 \u003c 5ms
+            - **影响范围**: 彻底解决 Deep Thinking 模式下的两大顽疾,释放 40%-60% Context 空间,确保长对话稳定性
+    *   **v3.3.43 (2026-01-18)**:
+        - **[国际化] 设备指纹对话框全量本地化 (PR #825, 感谢 @IamAshrafee)**:
+            - 彻底解决了设备指纹（Device Fingerprint）对话框中残留的硬编码中文字符串问题。
+            - 补全了英、繁、日等 8 种语言的翻译骨架，提升全球化体验。
+        - **[日语优化] 日语翻译补全与术语修正 (PR #822, 感谢 @Koshikai)**:
+            - 补全了 50 多个缺失的翻译键，覆盖配额保护、HTTP API、更新检查等核心设置。
+            - 优化了技术术语，使日语表达更自然（例如：`pro_low` 译为“低消費”）。
+        - **[翻译修复] 越南语拼写错误修正 (PR #798, 感谢 @vietnhatthai)**:
+            - 修复了越南语设置中 `refresh_msg` 的拼写错误（`hiện đài` -> `hiện tại`）。
+        - **[兼容性增强] 新增 Google API Key 原生支持 (PR #831)**:
+            - **支持 `x-goog-api-key` 请求头**:
+                - 认证中间件现在支持识别 `x-goog-api-key` 头部。
+                - 提高了与 Google 官方 SDK 及第三方 Google 风格客户端的兼容性，无需再手动修改 Header 为 `x-api-key`。
+    *   **v3.3.42 (2026-01-18)**:
+        - **[流量日志增强] 协议自动识别与流式响应整合 (PR #814)**:
+            - **协议标签分类**: 流量日志列表现在可以根据 URI 自动识别并标注协议类型（OpenAI 绿色、Anthropic 橙色、Gemini 蓝色），使请求来源一目了然。
+            - **流式数据全整合**: 彻底解决了流式响应在日志中仅显示 `[Stream Data]` 的问题。现在会自动拦截并聚合流式数据包，将分散的 `delta` 片段还原为完整的回复内容和“思考”过程，大幅提升调试效率。
+            - **多语言适配**: 补全了流量日志相关功能在 8 种语言环境下的 i18n 翻译。
+        - **[重大修复] Gemini JSON Schema 清洗策略深度重构 (Issue #815)**:
+            - **解决属性丢失问题**: 实现了“最佳分支合并”逻辑。在处理工具定义的 `anyOf`/`oneOf` 结构时，会自动识别并提取内容最丰富的分支属性向上合并，彻底解决了模型报错 `malformed function call` 的顽疾。
+            - **稳健的白名单机制**: 采用针对 Gemini API 的严格白名单过滤策略，剔除不支持的校验字段，确保 API 调用 100% 兼容（从根本上杜绝 400 错误）。
+            - **约束信息迁移 (Description Hints)**: 在移除 `minLength`, `pattern`, `format` 等字段前，自动将其转为文字描述追加到 `description` 中，确保模型依然能感知参数约束。
+            - **Schema 上下文检测锁**: 新增安全检查逻辑，确保清洗器仅在处理真正的 Schema 时执行。通过“精准锁”保护了 `request.rs` 中的工具调用结构，确保历史修复逻辑（如布尔值转换、Shell 数组转换）在重构后依然稳如磐石。
+    *   **v3.3.41 (2026-01-18)**:
+        - **Claude 协议核心兼容性修复 (Issue #813)**:
+            - **连续 User 消息合并**: 实现了 `merge_consecutive_messages` 逻辑，在请求进入 Proxy 时自动合并具有相同角色的连续消息流。彻底解决了因 Spec/Plan 模式切换导致的角色交替违规产生的 400 Bad Request 错误。
+            - **EnterPlanMode 协议对齐**: 针对 Claude Code 的 `EnterPlanMode` 工具调用，强制清空冗余参数，确保完全符合官方协议，解决了激活 Plan Mode 时的指令集校验失败问题。
+        - **代理鲁棒性增强**:
+            - 增强了工具调用链的自愈能力。当模型因幻觉产生错误路径尝试时，Proxy 现能提供标准的错误反馈引导模型转向正确路径。
+    *   **v3.3.40 (2026-01-18)**:
+        - **API 400 错误深度修复 (Grep/Thinking 稳定性改进)**:
+            - **修复流式块顺序违规**: 彻底解决了 "Found 'text' instead of 'thinking'" 400 错误。修正了 `streaming.rs` 中在文字块后非法追加思维块的逻辑，改由缓存机制实现静默同步。
+            - **思维签名自愈增强**: 在 `claude.rs` 中扩展了 400 错误捕获关键词，覆盖了签名失效、顺序违规和协议不匹配场景。一旦触发，代理会自动执行消息降级并快速重试，实现用户无感知的异常自愈。
+            - **搜索工具参数深度对齐**: 修正了 `Grep` 和 `Glob` 工具的参数映射逻辑，将 `query` 准确映射为 `path` (Claude Code Schema)，并支持默认注入执行路径 `.`。
+            - **工具名重映射策略优化**: 改进了重命名逻辑，仅针对 `search` 等模型幻觉进行修正，避免破坏原始工具调用签名。
+            - **签名缺失自动补完**: 针对 LS、Bash、TodoWrite 等工具调用缺失 `thought_signature` 的情况，自动注入通用校验占位符，确保协议链路畅通。
+        - **架构健壮性优化**:
+            - 增强了全局递归清理函数 `clean_cache_control_from_messages`，确保 `cache_control` 不会干扰 Vertex AI/Anthropic 严格模式。
+            - 完善了错误日志系统，建立了详细的场景对照表并记录于 [docs/client_test_examples.md](docs/client_test_examples.md)。
     *   **v3.3.39 (2026-01-17)**:
         - **代理深度优化 (Gemini 稳定性增强)**：
             - **Schema 净化器升级**：支持 `allOf` 合并、智能联合类型选择、Nullable 自动过滤及空对象参数补全，彻底解决复杂工具定义导致的 400 错误。

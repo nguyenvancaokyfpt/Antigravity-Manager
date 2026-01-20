@@ -1,6 +1,6 @@
 [package]
 name = "antigravity_tools"
-version = "3.3.39"
+version = "3.3.45"
 description = "A Tauri App"
 authors = ["you"]
 license = "CC-BY-NC-SA-4.0"
@@ -34,8 +34,8 @@ base64 = "0.22"
 sysinfo = "0.31"
 tokio = { version = "1", features = ["full"] }
 url = "2.5.7"
-tauri-plugin-dialog = "2.4.2"
-tauri-plugin-fs = "2.4.4"
+tauri-plugin-dialog = "2.6.0"
+tauri-plugin-fs = "2.4.5"
 image = "0.25.9"
 thiserror = "2.0.17"
 
@@ -62,6 +62,8 @@ libc = "0.2"
 tracing-appender = "0.2.4"
 tracing-log = "0.2.0"
 tauri-plugin-autostart = "2.5.1"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 sha2 = "0.10"
 toml = "0.8"
 toml_edit = "0.22"

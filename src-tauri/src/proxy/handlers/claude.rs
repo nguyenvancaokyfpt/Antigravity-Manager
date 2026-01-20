@@ -15,9 +15,10 @@ use tracing::{debug, error, info};
 use crate::proxy::mappers::claude::{
     transform_claude_request_in, transform_response, create_claude_sse_stream, ClaudeRequest,
     filter_invalid_thinking_blocks_with_family, close_tool_loop_for_thinking,
-    clean_cache_control_from_messages,
+    clean_cache_control_from_messages, merge_consecutive_messages,
 };
 use crate::proxy::server::AppState;
+use crate::proxy::mappers::context_manager::{ContextManager, PurificationStrategy};
 use axum::http::HeaderMap;
 use std::sync::atomic::Ordering;
 
@@ -254,6 +255,10 @@ pub async fn handle_messages(
     // [CRITICAL FIX] 预先清理所有消息中的 cache_control 字段 (Issue #744)
     // 必须在序列化之前处理，以确保 z.ai 和 Google Flow 都不受历史消息缓存标记干扰
     clean_cache_control_from_messages(&mut request.messages);
+
+    // [FIX #813] 合并连续的同角色消息 (Consecutive User Messages)
+    // 这对于 z.ai (Anthropic 直接转发) 路径至关重要，因为原始结构必须符合协议
+    merge_consecutive_messages(&mut request.messages);
 
     // Get model family for signature validation
     let target_family = if use_zai {
@@ -509,6 +514,52 @@ pub async fn handle_messages(
             }
         }
 
+        // ===== [Context Purification] Dynamic Thinking Stripping (Issue #PromptTooLong) =====
+        // 对 Pro/Flash 模型进行差异化的上下文管理
+        let mut is_purified = false;
+        if !retried_without_thinking {
+            // 1. 确定上下文限制 (Flash: ~1M, Pro: ~2M)
+            // Conservatively use 900k for Flash and 1.8M for Pro to check pressure
+            let context_limit = if mapped_model.contains("flash") {
+                1_000_000
+            } else {
+                2_000_000
+            };
+
+            // 2. 估算当前用量
+            let estimated_usage = ContextManager::estimate_token_usage(&request_with_mapped);
+            let usage_ratio = estimated_usage as f32 / context_limit as f32;
+
+            // 3. 确定清洗策略
+            // > 90%: 激进剥离 (Aggressive) - 移除所有历史 Thinking
+            // > 60%: 柔性剥离 (Soft) - 仅保留最近 2 轮 Thinking
+            // < 60%: 不处理
+            // 3. 确定清洗策略
+            // > 90%: 激进剥离 (Aggressive) - 移除所有历史 Thinking
+            // > 60%: 柔性剥离 (Soft) - 仅保留最近 2 轮 Thinking
+            // < 60%: 不处理
+            let strategy = if usage_ratio > 0.9 {
+                PurificationStrategy::Aggressive
+            } else if usage_ratio > 0.6 {
+                PurificationStrategy::Soft
+            } else {
+                PurificationStrategy::None
+            };
+            
+            // 4. 执行清洗
+            if strategy != PurificationStrategy::None {
+                info!(
+                    "[{}] [ContextManager] Context pressure: {:.1}% ({} / {}), Strategy: {:?} => Purifying history", 
+                    trace_id, usage_ratio * 100.0, estimated_usage, context_limit, strategy
+                );
+                
+                if ContextManager::purify_history(&mut request_with_mapped.messages, strategy) {
+                    is_purified = true;
+                    debug!("[{}] History purified successfully", trace_id);
+                }
+            }
+        }
+
         request_with_mapped.model = mapped_model;
 
         // 生成 Trace ID (简单用时间戳后缀)
@@ -578,7 +629,11 @@ pub async fn handle_messages(
             if actual_stream {
                 let stream = response.bytes_stream();
                 let gemini_stream = Box::pin(stream);
-                // [v3.3.17] Pass session_id for signature caching
+
+
+                // [FIX #530/#529/#859] Enhanced Peek logic to handle heartbeats and slow start
+                // We must pre-read until we find a MEANINGFUL content block (like message_start).
+                // If we only get heartbeats (ping) and then the stream dies, we should rotate account.
                 let mut claude_stream = create_claude_sse_stream(
                     gemini_stream, 
                     trace_id.clone(), 
@@ -588,18 +643,55 @@ pub async fn handle_messages(
                     context_limit
                 );
 
-                // [FIX #530/#529] Peek first chunk to detect empty response and allow retry
-                // If the stream is empty or fails immediately, we should retry instead of sending 200 OK + empty body
-                let first_chunk = claude_stream.next().await;
+                let mut first_data_chunk = None;
+                let mut retry_this_account = false;
 
-                match first_chunk {
-                    Some(Ok(bytes)) => {
-                        if bytes.is_empty() {
-                            tracing::warn!("[{}] Empty first chunk received, treating as Empty Response and retrying...", trace_id);
-                            last_error = "Empty response stream (0 bytes)".to_string();
-                            continue;
+                // Loop to skip heartbeats during peek
+                loop {
+                    match tokio::time::timeout(std::time::Duration::from_secs(60), claude_stream.next()).await {
+                        Ok(Some(Ok(bytes))) => {
+                            if bytes.is_empty() {
+                                continue;
+                            }
+                            
+                            let text = String::from_utf8_lossy(&bytes);
+                            // Skip SSE comments/pings
+                            if text.trim().starts_with(":") {
+                                debug!("[{}] Skipping peek heartbeat: {}", trace_id, text.trim());
+                                continue;
+                            }
+
+                            // We found real data!
+                            first_data_chunk = Some(bytes);
+                            break;
                         }
-                        
+                        Ok(Some(Err(e))) => {
+                            tracing::warn!("[{}] Stream error during peek: {}, retrying...", trace_id, e);
+                            last_error = format!("Stream error during peek: {}", e);
+                            retry_this_account = true;
+                            break;
+                        }
+                        Ok(None) => {
+                            tracing::warn!("[{}] Stream ended during peek (Empty Response), retrying...", trace_id);
+                            last_error = "Empty response stream during peek".to_string();
+                            retry_this_account = true;
+                            break;
+                        }
+                        Err(_) => {
+                            tracing::warn!("[{}] Timeout waiting for first data (60s), retrying...", trace_id);
+                            last_error = "Timeout waiting for first data".to_string();
+                            retry_this_account = true;
+                            break;
+                        }
+                    }
+                }
+
+                if retry_this_account {
+                    continue;
+                }
+
+                match first_data_chunk {
+                    Some(bytes) => {
                         // We have data! Construct the combined stream
                         let stream_rest = claude_stream;
                         let combined_stream = Box::pin(futures::stream::once(async move { Ok(bytes) })
@@ -620,6 +712,7 @@ pub async fn handle_messages(
                                 .header(header::CONNECTION, "keep-alive")
                                 .header("X-Account-Email", &email)
                                 .header("X-Mapped-Model", &request_with_mapped.model)
+                                .header("X-Context-Purified", if is_purified { "true" } else { "false" })
                                 .body(Body::from_stream(combined_stream))
                                 .unwrap();
                         } else {
@@ -634,6 +727,7 @@ pub async fn handle_messages(
                                         .header(header::CONTENT_TYPE, "application/json")
                                         .header("X-Account-Email", &email)
                                         .header("X-Mapped-Model", &request_with_mapped.model)
+                                        .header("X-Context-Purified", if is_purified { "true" } else { "false" })
                                         .body(Body::from(serde_json::to_string(&full_response).unwrap()))
                                         .unwrap();
                                 }
@@ -643,11 +737,7 @@ pub async fn handle_messages(
                             }
                         }
                     },
-                    Some(Err(e)) => {
-                        tracing::warn!("[{}] Stream error on first chunk: {}, retrying...", trace_id, e);
-                        last_error = format!("Stream error: {}", e);
-                        continue;
-                    },
+
                     None => {
                         tracing::warn!("[{}] Stream ended immediately (Empty Response), retrying...", trace_id);
                         last_error = "Empty response stream (None)".to_string();
@@ -726,8 +816,7 @@ pub async fn handle_messages(
             token_manager.mark_rate_limited_async(&email, status_code, retry_after.as_deref(), &error_text, Some(&request_with_mapped.model)).await;
         }
 
-        // 4. 处理 400 错误 (Thinking 签名失效)
-        // 由于已经主动过滤,这个错误应该很少发生
+        // 4. 处理 400 错误 (Thinking 签名失效 或 块顺序错误)
         if status_code == 400
             && !retried_without_thinking
             && (error_text.contains("Invalid `signature`")
@@ -735,11 +824,15 @@ pub async fn handle_messages(
                 || error_text.contains("thinking.thinking: Field required")
                 || error_text.contains("thinking.signature")
                 || error_text.contains("thinking.thinking")
-                || error_text.contains("INVALID_ARGUMENT")  // [New] Catch generic Google 400s
-                || error_text.contains("Corrupted thought signature") // [New] Explicit signature corruption
-                || error_text.contains("failed to deserialise") // [New] JSON structure issues
-                || error_text.contains("Invalid signature") // [New] Universal signature error
-                || error_text.contains("thinking block") // [New] Thinking block context
+                || error_text.contains("INVALID_ARGUMENT")
+                || error_text.contains("Corrupted thought signature")
+                || error_text.contains("failed to deserialise")
+                || error_text.contains("Invalid signature")
+                || error_text.contains("thinking block")
+                || error_text.contains("Found `text`")
+                || error_text.contains("Found 'text'")
+                || error_text.contains("must be `thinking`")
+                || error_text.contains("must be 'thinking'")
                 )
         {
             // Existing logic for thinking signature...

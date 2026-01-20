@@ -10,7 +10,7 @@ pub mod thinking_utils;
 pub mod collector;
 
 pub use models::*;
-pub use request::{transform_claude_request_in, clean_cache_control_from_messages};
+pub use request::{transform_claude_request_in, clean_cache_control_from_messages, merge_consecutive_messages};
 pub use response::transform_response;
 pub use streaming::{PartProcessor, StreamingState};
 pub use thinking_utils::{close_tool_loop_for_thinking, filter_invalid_thinking_blocks_with_family};
@@ -41,9 +41,9 @@ pub fn create_claude_sse_stream(
         let mut buffer = BytesMut::new();
 
         loop {
-            // [NEW] 15秒心跳保活: 如果长时间无数据，发送 ping 包
+            // [NEW] 30秒心跳保活: 延长超时时间以兼容长延迟模型
             let next_chunk = tokio::time::timeout(
-                std::time::Duration::from_secs(15),
+                std::time::Duration::from_secs(30),
                 gemini_stream.next()
             ).await;
 
@@ -165,7 +165,7 @@ fn process_sse_line(line: &str, state: &mut StreamingState, trace_id: &str, emai
     // [DISABLED] Temporarily disabled to fix Cherry Studio compatibility
     // Cherry Studio doesn't recognize "web_search_tool_result" type, causing validation errors
     // Search results are still displayed via Markdown text block in streaming.rs (lines 341-381)
-    // TODO: Research Antigravity2Api implementation for correct type mapping
+
     /*
     if let Some(grounding) = raw_json
         .get("candidates")

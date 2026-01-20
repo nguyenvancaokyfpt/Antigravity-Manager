@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> Professional AI Account Management & Proxy System (v3.3.39)
+> Professional AI Account Management & Proxy System (v3.3.45)
 
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
@@ -9,7 +9,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.39-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.45-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -59,7 +59,7 @@ If you find this project helpful, feel free to buy me a coffee!
 *   **Smart Recommendation**: The system uses a real-time algorithm to filter and recommend the "Best Account" based on quota redundancy, supporting **one-click switching**.
 *   **Active Account Snapshot**: Visually displays the specific quota percentage and the last synchronization time of the currently active account.
 
-### 2. 🔐 Professional AI Account Management & Proxy System (v3.3.27)
+### 2. 🔐 Professional AI Account Management & Proxy System
 *   **OAuth 2.0 Authorization (Auto/Manual)**: Pre-generates a copyable authorization URL so you can finish auth in any browser; after the callback, the app auto-completes and saves the account (use “I already authorized, continue” if needed).
 *   **Multi-dimensional Import**: Supports single token entry, JSON batch import, and automatic hot migration from V1 legacy databases.
 *   **Gateway-level Views**: Supports switching between "List" and "Grid" views. Provides 403 Forbidden detection, automatically marking and skipping accounts with permission anomalies.
@@ -132,6 +132,13 @@ Download from [GitHub Releases](https://github.com/lbjlaq/Antigravity-Manager/re
 *   **Windows**: `.msi` or portable `.zip`
 *   **Linux**: `.deb` or `AppImage`
 
+### Option C: Arch Linux (Official Script)
+We provide an official one-liner installation script for Arch Linux users. It automatically fetches the latest release from GitHub and installs it:
+```bash
+curl -sSL https://raw.githubusercontent.com/lbjlaq/Antigravity-Manager/main/deploy/arch/install.sh | bash
+```
+> **Tip**: This script will automatically download the latest `.deb` assets and install them using `makepkg`.
+
 ### Option C: Remote Server Deployment (Headless Linux)
 If you need to run on a headless remote Linux server (Ubuntu/Debian/CentOS), use our **Headless (Xvfb)** one-click deployment solution:
 
@@ -140,6 +147,23 @@ curl -fsSL https://raw.githubusercontent.com/lbjlaq/Antigravity-Manager/main/dep
 ```
 > **Note**: This solution uses Xvfb to simulate a GUI environment. Resource consumption (RAM/CPU) will be higher than a native backend service.
 > **See**: [Server Deployment Guide (deploy/headless-xvfb)](./deploy/headless-xvfb/README.md)
+
+### Option D: Docker Deployment (Recommended for NAS/Servers)
+If you prefer running in a containerized environment, we provide a full Docker image and configuration with built-in noVNC support for direct browser-based GUI access.
+
+```bash
+# 1. Enter the deployment directory
+cd deploy/docker
+
+# 2. Start the service
+docker compose up -d
+```
+> **Access URL**: `http://localhost:6080/vnc_lite.html` (Default VNC password: `password`)
+> **System Requirements**:
+> - **RAM**: **2GB** recommended (minimum 512MB).
+> - **Shared Memory**: Requires `shm_size: 2gb` (pre-configured in compose) to prevent browser crashes.
+> - **Architecture**: Supports x86_64 and ARM64.
+> **See**: [Docker Deployment Guide (deploy/docker)](./deploy/docker/README.md)
 
 ### 🛠️ Troubleshooting
 
@@ -187,6 +211,93 @@ print(response.choices[0].message.content)
 ## 📝 Developer & Community
 
 *   **Changelog**:
+    *   **v3.3.45 (2026-01-19)**:
+        - **[Core] Critical Fix for Claude/Gemini SSE Interruptions & 0-Token Responses (Issue #859)**:
+            - **Enhanced Peek Logic**: The proxy now loops through initial SSE chunks to filter out heartbeat pings and empty data, ensuring a valid content block is received before committing to a 200 OK response.
+            - **Smart Retry Trigger**: If no valid data is received within 60s or the stream is interrupted during the peek phase, the system automatically triggers account rotation and retries, eliminating silent failures for long-latency models.
+            - **Protocol Alignment & Optimization**: Introduced a matching peek mechanism for Gemini and relaxed Claude's heartbeat interval to 30s to improve stability during long-form content generation.
+        - **[Core] Fixed Account Mode Integration (PR #842)**:
+            - **Backend Enhancement**: Introduced `preferred_account_id` support in the proxy core, allowing mandatory locking of specific accounts via API or UI.
+            - **UI Update**: Added a "Fixed Account" toggle and account selector in the API Proxy page to lock the outbound account for the current session.
+            - **Scheduling Optimization**: Fixed Account Mode takes precedence over traditional round-robin, ensuring session continuity for specific business scenarios.
+        - **[i18n] Full Translation Completion & Cleanup**:
+            - **8-Language Coverage**: Completed all i18n translation keys related to "Fixed Account Mode" for all 8 supported languages.
+            - **Redundant Key Cleanup**: Fixed "Duplicate Keys" lint warnings in `ja.json` and `vi.json` caused by historical PR accumulation.
+            - **Punctuation Sync**: Standardized punctuation across Russian and Portuguese translations, removing accidentally used full-width Chinese punctuation.
+        - **[Core Feature] Client Hot Update & Token Statistics (PR #846 by @lengjingxu)**:
+            - **Native Updater**: Integrated Tauri v2 native update plugin, supporting automatic detection, downloading, installation, and restarting for seamless client upgrades.
+            - **Token Consumption Visualization**: Added an SQLite-based Token statistics persistence module, supporting total and per-account usage views by hour/day/week.
+            - **UI/UX & i18n Enhancements**: Optimized chart tooltips for better Dark Mode contrast; completed full translation for all 8 languages and fixed hardcoded legend labels.
+            - **Integration Fix**: Fixed an application crash caused by missing plugin configurations found during the manual merge of the original PR code.
+        - **[Optimization] Tsinghua (TUNA) Mirror Support**: Optimized the Dockerfile build process, significantly improving package installation speed in mainland China.
+        - **[Deployment] Official Docker & noVNC Support (PR #851)**:
+            - **Full Containerization**: Provides a complete Docker deployment solution for headless environments, with built-in Openbox WM.
+            - **Web VNC Integration**: Integrated noVNC for direct browser-based GUI access (essential for OAuth flows, with Firefox ESR included).
+            - **Self-Healing Startup**: Optimized `start.sh` with X11 lock file cleanup and service crash monitoring for enterprise-grade stability.
+            - **i18n Readiness**: Built-in CJK fonts ensuring proper rendering of Chinese characters in the Docker environment.
+            - **Performance Tuning**: Standardized `shm_size: 2gb` to eliminate container browser and GUI crashes.
+        - **[Core Feature] Fixed Device Fingerprint Synchronization on Account Switch**:
+            - **Path Detection Improvement**: Optimized the timing of `storage.json` detection to ensure accurate path acquisition before process closure, compatible with custom data directories.
+            - **Automatic Isolation Generation**: For accounts without a bound fingerprint, a unique device identifier is now automatically generated and bound during the first switch, ensuring complete fingerprint isolation between accounts.
+        - **[UI Fix] Fixed Inaccurate Page Size Display on Account Management Page (Issue #754)**:
+            - **Logic Correction**: Forced the default minimum page size to 10, resolving the unintuitive experience where it would automatically change to 5 or 9 in small windows.
+            - **Persistence Enhancement**: Implemented `localStorage` persistence for page size. Manually selected page sizes now permanently lock and override the automatic mode.
+            - **UI Consistency**: Ensured the pagination dropdown always aligns with the actual number of items displayed in the list.
+    *   **v3.3.44 (2026-01-19)**:
+        - **[Core Stability] Dynamic Thinking Stripping - Complete Fix for Prompt Too Long & Signature Errors**:
+            - **Background**: In Deep Thinking mode, long conversations cause two critical errors:
+                - `Prompt is too long`: Historical Thinking Blocks accumulate and exceed token limits
+                - `Invalid signature`: Proxy restarts clear in-memory signature cache, causing Google to reject old signatures
+            - **Solution - Context Purification**:
+                - **New `ContextManager` Module**: Implements token estimation and history purification logic
+                - **Tiered Purification Strategy**:
+                    - `Soft` (60%+ pressure): Retains last ~2 turns of Thinking, strips earlier history
+                    - `Aggressive` (90%+ pressure): Removes all historical Thinking Blocks
+                - **Differentiated Limits**: Flash models (1M) and Pro models (2M) use different trigger thresholds
+                - **Signature Sync Removal**: Automatically removes `thought_signature` when purifying Thinking to avoid validation failures
+            - **Transparency Enhancement**: Added `X-Context-Purified: true` response header for debugging
+            - **Performance Optimization**: Lightweight character-based token estimation with <5ms request latency impact
+            - **Impact**: Completely resolves two major issues in Deep Thinking mode, freeing 40%-60% context space and ensuring long conversation stability
+    *   **v3.3.43 (2026-01-18)**:
+        - **[i18n] Full Internationalization of Device Fingerprint Dialog (PR #825, thanks to @IamAshrafee)**:
+            - Completely resolved the hard-coded Chinese strings in the Device Fingerprint dialog.
+            - Added translation skeletons for 8 languages (EN, JA, VI, etc.) to ensure a consistent experience.
+        - **[Japanese] Translation Completion & Terminology Optimization (PR #822, thanks to @Koshikai)**:
+            - Added 50+ missing translation keys covering core settings like Quota Protection, HTTP API, and Update Checks.
+            - Improved technical wording for natural Japanese expressions (e.g., `pro_low` to "低消費").
+        - **[Fix] Vietnamese Spelling Correction (PR #798, thanks to @vietnhatthai)**:
+            - Fixed a typo in the Vietnamese `refresh_msg` (`hiện đài` -> `hiện tại`).
+        - **[Compatibility] Native Google API Key Support (PR #831)**:
+            - **Added `x-goog-api-key` Header Support**:
+                - The auth middleware now recognizes the `x-goog-api-key` header.
+                - Improves compatibility with official Google SDKs and third-party tools that use Google-style headers, eliminating the need to manually change header to `x-api-key`.
+    *   **v3.3.42 (2026-01-18)**:
+        - **[Traffic Log Enhancement] Protocol Recognition & Stream Integration (PR #814)**:
+            - **Protocol Labeling**: Traffic logs now automatically identify and label protocol types (OpenAI in Green, Anthropic in Orange, Gemini in Blue) based on URI, providing instant clarity on request sources.
+            - **Full Stream Consolidation**: Resolved the issue where streaming responses only displayed `[Stream Data]`. The proxy now intercepts and aggregates stream chunks, restoring scattered `delta` fragments into complete response content and "thinking" processes for significantly improved debugging.
+            - **i18n Support**: Completed i18n translations for traffic log features across 8 languages.
+        - **[Critical Fix] Deep Refactoring of Gemini JSON Schema Cleaning (Issue #815)**:
+            - **Resolved Property Loss**: Implemented "Best Branch Merging" logic for `anyOf`/`oneOf` structures in tool definitions. It automatically extracts properties from the richest branch, fixing the long-standing `malformed function call` error.
+            - **Robust Whitelist Mechanism**: Adopted a strict allowlist approach to remove fields unsupported by Gemini, ensuring 100% API compatibility and eliminating 400 errors.
+            - **Constraint Migration (Description Hints)**: Unsupported validation fields like `minLength`, `pattern`, and `format` are now automatically converted into text hints and appended to the `description`, preserving semantic information for the model.
+            - **Schema Context Detection Lock**: Added a safety check to ensure the cleaner only operates on actual Schema nodes. This "precision lock" protects tool call structures in `request.rs`, ensuring the stability of historical fixes (e.g., boolean coercion, shell array conversion).
+    *   **v3.3.41 (2026-01-18)**:
+        - **Claude Protocol Core Compatibility Fixes (Issue #813)**:
+            - **Consecutive User Message Merging**: Implemented `merge_consecutive_messages` logic to automatically merge consecutive messages with the same role. This resolves 400 Bad Request errors caused by role alternation violations during Spec/Plan mode switches.
+            - **EnterPlanMode Protocol Alignment**: For Claude Code's `EnterPlanMode` tool calls, redundant arguments are now forcibly cleared to ensure full compliance with the official protocol, fixing instruction set validation failures.
+        - **Proxy Robustness Enhancements**:
+            - Enhanced self-healing capabilities for tool call chains. When the model generates erroneous paths due to hallucinations, the Proxy now provides standard error feedback to guide the model back to the correct path.
+
+    *   **v3.3.40 (2026-01-18)**:
+        - **Deep Fix for API 400 Errors (Grep/Thinking Stability)**:
+            - **Resolved Protocol Order Violation**: Fixed the "Found 'text' instead of 'thinking'" 400 error by refactoring `streaming.rs` to stop appending illegal thinking blocks after text blocks. Signatures are now silently cached for recovery.
+            - **Enhanced Thinking Signature Self-healing**: Expanded 400 error keyword capture in `claude.rs` to cover signature invalidation, sequence errors, and protocol mismatches. Implemented millisecond-level silent retries with automated session healing.
+            - **Search Tool Schema Alignment**: Corrected parameter remapping for `Grep` and `Glob` tools, ensuring `query` is accurately mapped to `path` as per Claude Code Schema, with automatic injection of default path `.`.
+            - **Optimized Tool Renaming Strategy**: Refined the renaming logic to only target known hallucinations (like `search`), preserving the integrity of original tool call signatures.
+            - **Automatic Signature Completion**: For tool calls like LS, Bash, and TodoWrite that missing `thought_signature`, the proxy now automatically injects a placeholder to satisfy upstream constraints.
+        - **Architectural Robustness**:
+            - Enhanced the global recursive cleaner `clean_cache_control_from_messages` to strip illegal `cache_control` tags that disrupt Vertex AI/Anthropic strict mode.
+            - Updated comprehensive test examples in [docs/client_test_examples.md](docs/client_test_examples.md) covering all known 400 error scenarios.
     *   **v3.3.39 (2026-01-17)**:
         - **Deep Proxy Optimizations (Gemini Stability Boost)**:
             - **Schema Purifier Upgrade**: Supported `allOf` merging, intelligent union type selection, automatic Nullable filtering, and empty object parameter backfill, completely resolving 400 errors caused by complex tool definitions.

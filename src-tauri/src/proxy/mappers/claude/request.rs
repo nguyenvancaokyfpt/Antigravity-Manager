@@ -250,6 +250,51 @@ fn sort_thinking_blocks_first(messages: &mut [Message]) {
     }
 }
 
+/// 合并 ClaudeRequest 中连续的同角色消息
+/// 
+/// 场景: 当从 Spec/Plan 模式切换回编码模式时，可能出现连续两条 "user" 消息
+/// (一条是 ToolResult，一条是 <system-reminder>)。
+/// 这会违反角色交替规则，导致 400 报错。
+pub fn merge_consecutive_messages(messages: &mut Vec<Message>) {
+    if messages.len() <= 1 {
+        return;
+    }
+
+    let mut merged: Vec<Message> = Vec::with_capacity(messages.len());
+    let old_messages = std::mem::take(messages);
+    let mut messages_iter = old_messages.into_iter();
+
+    if let Some(mut current) = messages_iter.next() {
+        for next in messages_iter {
+            if current.role == next.role {
+                // 合并内容
+                match (&mut current.content, next.content) {
+                    (MessageContent::Array(current_blocks), MessageContent::Array(next_blocks)) => {
+                        current_blocks.extend(next_blocks);
+                    }
+                    (MessageContent::Array(current_blocks), MessageContent::String(next_text)) => {
+                        current_blocks.push(ContentBlock::Text { text: next_text });
+                    }
+                    (MessageContent::String(current_text), MessageContent::String(next_text)) => {
+                        *current_text = format!("{}\n\n{}", current_text, next_text);
+                    }
+                    (MessageContent::String(current_text), MessageContent::Array(next_blocks)) => {
+                        let mut new_blocks = vec![ContentBlock::Text { text: current_text.clone() }];
+                        new_blocks.extend(next_blocks);
+                        current.content = MessageContent::Array(new_blocks);
+                    }
+                }
+            } else {
+                merged.push(current);
+                current = next;
+            }
+        }
+        merged.push(current);
+    }
+
+    *messages = merged;
+}
+
 /// 转换 Claude 请求为 Gemini v1internal 格式
 
 /// [FIX #709] Reorder serialized Gemini parts to ensure thinking blocks are first
@@ -293,6 +338,11 @@ pub fn transform_claude_request_in(
     // 这解决了 VS Code 插件等客户端在多轮对话中将历史消息的 cache_control 字段
     // 原封不动发回导致的 "Extra inputs are not permitted" 错误
     let mut cleaned_req = claude_req.clone();
+
+    // [FIX #813] 合并连续的同角色消息 (Consecutive User Messages)
+    // 确保请求符合 Anthropic 和 Gemini 的角色交替协议
+    merge_consecutive_messages(&mut cleaned_req.messages);
+
     clean_cache_control_from_messages(&mut cleaned_req.messages);
     
     // [FIX #564] Pre-sort thinking blocks to be first in assistant messages
@@ -1555,7 +1605,8 @@ fn build_generation_config(
     }*/
 
     // max_tokens 映射为 maxOutputTokens
-    let mut final_max_tokens = 16384;
+    // Respect client-provided max_tokens (aligns with OpenAI mapper behavior)
+    let mut final_max_tokens: i64 = claude_req.max_tokens.map(|t| t as i64).unwrap_or(16384);
     
     // [NEW] 确保 maxOutputTokens 大于 thinkingBudget (API 强约束)
     if let Some(thinking_config) = config.get("thinkingConfig") {
@@ -2155,6 +2206,77 @@ mod tests {
         if let MessageContent::Array(blocks) = &messages[0].content {
             assert!(matches!(blocks[0], ContentBlock::Thinking { .. }), "Thinking should still be first");
             assert!(matches!(blocks[1], ContentBlock::Text { .. }), "Text should still be second");
+        }
+    }
+
+    #[test]
+    fn test_merge_consecutive_messages() {
+        let mut messages = vec![
+            Message {
+                role: "user".to_string(),
+                content: MessageContent::String("Hello".to_string()),
+            },
+            Message {
+                role: "user".to_string(),
+                content: MessageContent::Array(vec![
+                    ContentBlock::Text { text: "World".to_string() }
+                ]),
+            },
+            Message {
+                role: "assistant".to_string(),
+                content: MessageContent::String("Hi".to_string()),
+            },
+            Message {
+                role: "user".to_string(),
+                content: MessageContent::Array(vec![
+                    ContentBlock::ToolResult {
+                        tool_use_id: "test_id".to_string(),
+                        content: serde_json::json!("result"),
+                        is_error: None,
+                    }
+                ]),
+            },
+            Message {
+                role: "user".to_string(),
+                content: MessageContent::Array(vec![
+                    ContentBlock::Text { text: "System Reminder".to_string() }
+                ]),
+            },
+        ];
+
+        merge_consecutive_messages(&mut messages);
+
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].role, "user");
+        if let MessageContent::Array(blocks) = &messages[0].content {
+            assert_eq!(blocks.len(), 2);
+            match &blocks[0] {
+                ContentBlock::Text { text } => assert_eq!(text, "Hello"),
+                _ => panic!("Expected text block"),
+            }
+            match &blocks[1] {
+                ContentBlock::Text { text } => assert_eq!(text, "World"),
+                _ => panic!("Expected text block"),
+            }
+        } else {
+            panic!("Expected array content at index 0");
+        }
+
+        assert_eq!(messages[1].role, "assistant");
+
+        assert_eq!(messages[2].role, "user");
+        if let MessageContent::Array(blocks) = &messages[2].content {
+            assert_eq!(blocks.len(), 2);
+            match &blocks[0] {
+                ContentBlock::ToolResult { tool_use_id, .. } => assert_eq!(tool_use_id, "test_id"),
+                _ => panic!("Expected tool_result block"),
+            }
+            match &blocks[1] {
+                ContentBlock::Text { text } => assert_eq!(text, "System Reminder"),
+                _ => panic!("Expected text block"),
+            }
+        } else {
+            panic!("Expected array content at index 2");
         }
     }
 }

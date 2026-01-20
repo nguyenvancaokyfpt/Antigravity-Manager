@@ -14,7 +14,7 @@ pub fn transform_openai_request(request: &OpenAIRequest, project_id: &str, mappe
     // Resolve grounding config
     let config = crate::proxy::mappers::common_utils::resolve_request_config(&request.model, &mapped_model_lower, &tools_val);
 
-    // [FIX PR #368] 检测 Gemini 3 Pro thinking 模型
+    // 检测 Gemini 3 Pro thinking 模型
     let is_gemini_3_thinking = mapped_model_lower.contains("gemini-3") && 
         (mapped_model_lower.ends_with("-high") || mapped_model_lower.ends_with("-low") || mapped_model_lower.contains("-pro"));
     let is_claude_thinking = mapped_model_lower.ends_with("-thinking");
@@ -64,7 +64,7 @@ pub fn transform_openai_request(request: &OpenAIRequest, project_id: &str, mappe
         }
     }
 
-    // 从全局存储获取 thoughtSignature (PR #93 支持)
+    // 从全局存储获取 thoughtSignature 支持
     let global_thought_sig = get_thought_signature();
     if global_thought_sig.is_some() {
         tracing::debug!("从全局存储获取到 thoughtSignature (长度: {})", global_thought_sig.as_ref().unwrap().len());
@@ -170,7 +170,7 @@ pub fn transform_openai_request(request: &OpenAIRequest, project_id: &str, mappe
                                     }
                                 }
                                 OpenAIContentBlock::AudioUrl { audio_url: _ } => {
-                                    // [PR #311 部分合并] 暂时跳过 audio_url 处理
+                                    // 暂时跳过 audio_url 处理
                                     // 完整实现需要下载音频文件并转换为 Gemini inlineData 格式
                                     // 这会与 v3.3.16 的 thinkingConfig 逻辑冲突，留待后续版本实现
                                     tracing::debug!("[OpenAI-Request] Skipping audio_url (not yet implemented in v3.3.16)");
@@ -215,7 +215,7 @@ pub fn transform_openai_request(request: &OpenAIRequest, project_id: &str, mappe
                     // [New] 递归清理参数中可能存在的非法校验字段
                     crate::proxy::common::json_schema::clean_json_schema(&mut func_call_part);
 
-                    // [修复] 为该消息内的所有工具调用注入 thoughtSignature (PR #114 优化)
+                    // [修复] 为该消息内的所有工具调用注入 thoughtSignature
                     if let Some(ref sig) = global_thought_sig {
                         func_call_part["thoughtSignature"] = json!(sig);
                     } else if is_thinking_model && !mapped_model.starts_with("projects/") {
@@ -255,7 +255,7 @@ pub fn transform_openai_request(request: &OpenAIRequest, project_id: &str, mappe
         .filter(|msg| !msg["parts"].as_array().map(|a| a.is_empty()).unwrap_or(true))
         .collect();
 
-    // [PR #合并] 合并连续相同角色的消息 (Gemini 强制要求 user/model 交替)
+    // 合并连续相同角色的消息 (Gemini 强制要求 user/model 交替)
     let mut merged_contents: Vec<Value> = Vec::new();
     for msg in contents {
         if let Some(last) = merged_contents.last_mut() {
@@ -284,7 +284,7 @@ pub fn transform_openai_request(request: &OpenAIRequest, project_id: &str, mappe
         gen_config["candidateCount"] = json!(n);
     }
 
-    // [FIX PR #368] 为 thinking 模型注入 thinkingConfig (使用 thinkingBudget 而非 thinkingLevel)
+    // 为 thinking 模型注入 thinkingConfig (使用 thinkingBudget 而非 thinkingLevel)
     if is_thinking_model {
         gen_config["thinkingConfig"] = json!({
             "includeThoughts": true,
