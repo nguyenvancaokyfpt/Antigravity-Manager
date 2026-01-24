@@ -116,9 +116,22 @@ function Settings() {
 
     const handleSave = async () => {
         try {
+            // 校验：如果启用了上游代理但没有填写地址，给出提示
+            const proxyEnabled = formData.proxy?.upstream_proxy?.enabled;
+            const proxyUrl = formData.proxy?.upstream_proxy?.url?.trim();
+            if (proxyEnabled && !proxyUrl) {
+                showToast(t('proxy.config.upstream_proxy.validation_error', '启用上游代理时必须填写代理地址'), 'error');
+                return;
+            }
+
             // 强制开启后台自动刷新，确保联动逻辑生效
             await saveConfig({ ...formData, auto_refresh: true });
             showToast(t('common.saved'), 'success');
+
+            // 如果修改了代理配置，提示用户需要重启
+            if (proxyEnabled && proxyUrl) {
+                showToast(t('proxy.config.upstream_proxy.restart_hint', '代理配置已保存，重启应用后生效'), 'info');
+            }
         } catch (error) {
             showToast(`${t('common.error')}: ${error}`, 'error');
         }
@@ -304,6 +317,7 @@ function Settings() {
                                     <option value="tr">Türkçe</option>
                                     <option value="vi">Tiếng Việt</option>
                                     <option value="pt">Português</option>
+                                    <option value="ko">한국어</option>
                                     <option value="ru">Русский</option>
                                 </select>
                             </div>
@@ -735,7 +749,7 @@ function Settings() {
                                     <p className="text-sm text-gray-600 dark:text-gray-400">{t('settings.advanced.logs_desc')}</p>
                                 </div>
                                 <div className="badge badge-primary badge-outline gap-2 font-mono">
-                                    v3.3.49
+                                    v3.3.50
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <button
@@ -837,7 +851,7 @@ function Settings() {
                                         <h3 className="text-3xl font-black text-gray-900 dark:text-base-content tracking-tight mb-2">Antigravity Tools</h3>
                                         <div className="flex items-center justify-center gap-2 text-sm">
                                             <span className="px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium border border-blue-200 dark:border-blue-800">
-                                                v3.3.49
+                                                v3.3.50
                                             </span>
                                             <span className="text-gray-400 dark:text-gray-600">•</span>
                                             <span className="text-gray-500 dark:text-gray-400">Professional Account Management</span>

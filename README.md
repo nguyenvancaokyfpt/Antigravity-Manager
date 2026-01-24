@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> 专业的 AI 账号管理与协议反代系统 (v3.3.49)
+> 专业的 AI 账号管理与协议反代系统 (v3.3.50)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
@@ -8,7 +8,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.49-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.50-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -324,6 +324,29 @@ response = client.chat.completions.create(
 ## 📝 开发者与社区
 
 *   **版本演进 (Changelog)**:
+    *   **v3.3.50 (2026-01-23)**:
+        -   **[核心功能] 后台任务模型可配置 (Background Model Configuration)**:
+            -   **功能增强**: 允许用户自定义“后台任务”（如标题生成、摘要压缩）使用的模型。不再强制绑定 `gemini-2.5-flash`。
+            -   **UI 更新**: 在“模型映射”页面新增了“后台任务模型”配置项，支持从下拉菜单中选择任意可用模型（如 `gemini-3-flash`）。
+            -   **路由修复**: 修复了后台任务可能绕过用户自定义映射的问题。现在 `internal-background-task` 会严格遵循用户的重定向规则。
+        -   **[重要通告] 上游模型容量预警 (Capacity Warning)**:
+            -   **容量不足**: 接获大量反馈，上游 Google 的 `gemini-2.5-flash` 和 `gemini-2.5-flash-lite` 模型当前正处于极度容量受限状态 (Rate Limited / Capacity Exhausted)。
+            -   **建议操作**: 为保证服务可用性，建议用户暂时在“自定义映射”中将上述两个模型重定向至其他模型（如 `gemini-3-flash` 或 `gemini-3-pro-high`），直到上游恢复。
+        -   **[核心修复] Windows 启动参数支持 (PR #973)**:
+            -   **问题修复**: 修复了 Windows 平台下启动参数（如内网穿透配置等）无法正确解析生效的问题。感谢 @Mag1cFall 的贡献。
+        -   **[核心修复] Claude 签名校验增强 (PR #1009)**:
+            -   **功能优化**: 增强了 Claude 模型的签名校验逻辑，修复了在长对话或复杂工具调用场景下可能出现的 400 错误。
+            -   **兼容性提升**: 引入最小签名长度校验，并对合法长度的未知签名采取信任策略，大幅提升了 JSON 工具调用的稳定性。
+        -   **[国际化] 越南语翻译优化 (PR #1017)**:
+            -   **翻译精简**: 对关于页面等区域的越南语翻译进行了精简与标点优化。
+        -   **[国际化] 土耳其语托盘翻译增强 (PR #1023)**:
+            -   **功能优化**: 为系统托盘菜单增加了完整的土耳其语翻译支持，提升了土耳其语用户的操作体验。
+            -   **[功能增强] 多语言支持与 I18n 设置 (PR #1029)**:
+            -   **新增语言支持**: 增加了葡萄牙语、日语、越南语、土耳其语、俄语等多国语言的更完整支持。
+            -   **I18n 设置面板**: 在设置页面新增了语言选择器，支持即时切换应用显示语言。
+        -   **[国际化] 韩语支持与界面优化 (New)**:
+            -   **韩语集成**: 新增了完整的韩语 (`ko`) 翻译支持，现在可以在设置中选择韩语界面。
+            -   **UI 交互升级**: 重构了顶部导航栏的语言切换器，由原来的单次点击循环切换升级为更直观的下拉菜单，展示语言缩写与全称，提升了多语言环境下的操作体验。
     *   **v3.3.49 (2026-01-22)**:
         -   **[核心修复] Thinking 后中断与 0 Token 防御 (Fix Thinking Interruption)**:
             -   **问题背景**: 针对 Gemini 等模型在输出 Thinking 内容后流意外中断，导致 Claude 客户端收到 0 Token 响应并报错死锁的问题。
@@ -365,6 +388,10 @@ response = client.chat.completions.create(
         -   **[网络优化] OAuth 通信质量提升 (Issue #948, #887)**:
             -   **延时保障**: 将授权请求超时时间延长至 60 秒，大幅提升了在代理环境下的 Token 交换成功率。
             -   **错误指引**: 针对 Google API 连接超时或重置的情况，新增了明确的中文代理设置建议，降低排查门槛。
+        -   **[体验优化] 上游代理配置校验与提示增强 (Contributed by @zhiqianzheng)**:
+            -   **配置校验**: 当用户启用上游代理但未填写代理地址时，保存操作将被阻止并显示明确的错误提示，避免无效配置导致的连接失败。
+            -   **重启提醒**: 成功保存代理配置后，系统会提示用户需要重启应用才能使配置生效，降低用户排查成本。
+            -   **多语言支持**: 新增简体中文、繁体中文、英文、日语的相关翻译。
 
     *   **v3.3.48 (2026-01-21)**:
         -   **[核心修复] Windows 控制台闪烁问题 (Fix PR #933)**:

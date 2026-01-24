@@ -1796,6 +1796,46 @@ print(response.text)`;
                             <div className="p-3 space-y-3">
                                 {/* 精确映射管理 */}
                                 <div>
+                                    {/* 后台任务模型配置 (Compact Mode) */}
+                                    <div className="mb-4 pb-4 border-b border-gray-100 dark:border-base-200">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <div className="flex-1">
+                                                <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                                                    <Sparkles size={14} className="text-blue-500" />
+                                                    {t('proxy.router.background_task_title')}
+                                                </h3>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                                    {t('proxy.router.background_task_desc')}
+                                                </p>
+                                            </div>
+
+                                            <div className="flex items-center gap-2 w-full sm:w-auto min-w-[200px] max-w-sm">
+                                                <div className="relative flex-1">
+                                                    <GroupedSelect
+                                                        value={appConfig.proxy.custom_mapping?.['internal-background-task'] || ''}
+                                                        onChange={(val) => handleMappingUpdate('custom', 'internal-background-task', val)}
+                                                        options={[
+                                                            { value: '', label: 'Default (gemini-2.5-flash)', group: 'System' },
+                                                            ...customMappingOptions
+                                                        ]}
+                                                        placeholder="Default (gemini-2.5-flash)"
+                                                        className="font-mono text-[11px] h-8 dark:bg-base-200 w-full"
+                                                    />
+                                                </div>
+
+                                                {appConfig.proxy.custom_mapping && appConfig.proxy.custom_mapping['internal-background-task'] && (
+                                                    <button
+                                                        onClick={() => handleRemoveCustomMapping('internal-background-task')}
+                                                        className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
+                                                        title={t('proxy.router.use_default')}
+                                                    >
+                                                        <RefreshCw size={12} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <div className="flex items-center justify-between mb-3">
                                         <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                             <ArrowRight size={14} /> {t('proxy.router.custom_mappings')}

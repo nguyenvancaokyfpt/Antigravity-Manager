@@ -58,7 +58,9 @@
         "switch_to_russian": "切换到俄文",
         "switch_to_russian_short": "RU",
         "switch_to_portuguese": "切换到葡萄牙文",
-        "switch_to_portuguese_short": "PT"
+        "switch_to_portuguese_short": "PT",
+        "switch_to_korean": "切换到韩语",
+        "switch_to_korean_short": "KO"
     },
     "dashboard": {
         "hello": "你好, 用户 👋",
@@ -517,7 +519,9 @@
                 "enable": "启用上游代理",
                 "url": "代理地址",
                 "url_placeholder": "例如: http://127.0.0.1:7890 或 socks5://127.0.0.1:7890",
-                "tip": "支持 HTTP、HTTPS 和 SOCKS5 协议。"
+                "tip": "支持 HTTP、HTTPS 和 SOCKS5 协议。",
+                "validation_error": "启用上游代理时必须填写代理地址",
+                "restart_hint": "代理配置已保存，重启应用后生效"
             },
             "scheduling": {
                 "title": "账号轮换与会话调度",
@@ -659,6 +663,10 @@
             "title": "模型路由中心 (Model Router)",
             "subtitle": "按“规格家族”统一路由 OpenAI/Claude 模型，或添加最高优先级的“精确映射”。\n注意：Claude 原生直通模型（claude-opus-4-5-thinking 等 3 个）默认透传，需在“专家精确映射”中添加规则才能修改。",
             "subtitle_simple": "通过通配符或精确映射自定义模型路由规则",
+            "background_task_title": "后台任务模型",
+            "background_task_desc": "用于 Claude CLI 的标题生成、摘要提取等后台自动化任务 (默认: gemini-2.5-flash)",
+            "use_default": "使用系统默认",
+            "current_model": "当前模型",
             "apply_presets": "应用预设映射",
             "presets_applied": "预设映射已应用",
             "custom_mappings": "自定义映射 (Custom Mappings)",
